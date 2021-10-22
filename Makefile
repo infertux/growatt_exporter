@@ -7,7 +7,7 @@ SRCS=modbus.c http.c
 all: epever
 
 epever: $(SRCS)
-	$(CC) $(LIBS) -o epever $(SRCS)
+	$(CC) $(LIBS) -Wall -Werror -pedantic -o epever $(SRCS)
 
 clean:
 	$(RM) epever
