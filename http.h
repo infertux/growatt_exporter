@@ -7,7 +7,6 @@
 
 #include "modbus.h"
 
-#define PORT 1234
 #define BUFFER_SIZE 4096 // must hold both the HTTP headers and body
 #define BACKLOG 10  // passed to listen()
 
@@ -28,7 +27,7 @@ void set_response(char *response)
     }
 }
 
-int http(void)
+int http(const int port)
 {
     int server_socket = socket(
         AF_INET,     // IPv4
@@ -38,7 +37,7 @@ int http(void)
 
     struct sockaddr_in address;
     address.sin_family = AF_INET;
-    address.sin_port = htons(PORT);
+    address.sin_port = htons(port);
     address.sin_addr.s_addr = inet_addr("127.0.0.1");
 
     bind(server_socket, (struct sockaddr *)&address, sizeof(address));
@@ -52,7 +51,7 @@ int http(void)
     int client_socket;
     char response[BUFFER_SIZE];
     while(1) {
-        printf("HTTP server listening on 127.0.0.1:%d...\n", PORT);
+        printf("HTTP server listening on 127.0.0.1:%d...\n", port);
         client_socket = accept(server_socket, NULL, NULL);
 
         set_response(response);
