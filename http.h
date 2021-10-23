@@ -8,14 +8,14 @@
 
 #include "modbus.h"
 
-#define BUFFER_SIZE 2048 // must hold both the HTTP headers and body
+#define BUFFER_SIZE 4096 // must hold both the HTTP headers and body
 #define BACKLOG 10  // passed to listen()
 
-void set_response(const int id, char *response)
+void set_response(const int *ids, char *response)
 {
     char metrics[BUFFER_SIZE];
 
-    if (query(id, metrics)) {
+    if (query(ids, metrics)) {
         fprintf(stderr, "Modbus query failed\n");
         strcpy(response, "HTTP/1.1 503 Service Unavailable\r\n");
         strcat(response, "Server: epever-modbus\r\n");
@@ -26,9 +26,11 @@ void set_response(const int id, char *response)
         strcat(response, "\r\n");
         strcat(response, metrics);
     }
+
+    strcat(response, "\0");
 }
 
-int http(const int port)
+int http(const int port, const int *ids)
 {
     int server_socket = socket(
         AF_INET,     // IPv4
@@ -59,7 +61,7 @@ int http(const int port)
         client_socket = accept(server_socket, NULL, NULL);
         clock_gettime(CLOCK_REALTIME, &before);
         printf("HTTP server received request...\n");
-        set_response(port, response);
+        set_response(ids, response);
         //printf("response=\"%s\"\n", response);
         send(client_socket, response, strlen(response), 0);
         close(client_socket);

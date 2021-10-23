@@ -10,8 +10,8 @@
 #define metric(name, value) \
   do { \
     char buffer[256]; \
-    sprintf(buffer, "# HELP %s\n# TYPE %s gauge\n%s %f\n", \
-                    name, name, name, value); \
+    sprintf(buffer, "# HELP %s\n# TYPE %s gauge\n%s%s %f\n", \
+                    name, name, name, labels, value); \
     strcat(dest, buffer); \
   } while (0)
 
@@ -69,16 +69,19 @@ int bye(modbus_t *ctx, char *error) {
   return 1;
 }
 
-int query(const int id, char *dest) {
-  *dest = '\0'; // make sure buffer is clean
+int query_device(const int id, char *dest) {
+  fprintf(stderr, "Querying device ID %d...\n", id);
+
+  char labels[64];
+  sprintf(labels, "{device_id=\"%d\"}", id);
 
   modbus_t *ctx;
-
-  //ctx = modbus_new_tcp("192.168.1.41", 502);
-  //socat -ls -v pty,link=/home/infertux/ttyV0 tcp:192.168.1.41:502
-  char path[256];
+  // XXX: ideally we could use TCP but this always times out for some reason:
+  // ctx = modbus_new_tcp("192.168.1.X", 8088);
+  // ... so we use socat:
+  // socat -ls -v pty,link=/tmp/ttyepever123 tcp:192.168.1.X:8088
+  char path[64];
   sprintf(path, "/tmp/ttyepever%d", id);
-  fprintf(stderr, "path=%s\n", path);
   ctx = modbus_new_rtu(path, 115200, 'N', 8, 1);
   if (ctx == NULL) {
     return bye(ctx, "Unable to create the libmodbus context");
@@ -170,3 +173,16 @@ int query(const int id, char *dest) {
 
   return 0;
 }
+
+int query(const int *ids, char *dest) {
+  *dest = '\0'; // make sure buffer is clean
+
+  int ret;
+  for (int i = 0; ids[i] >= 0; i++) {
+      ret = query_device(ids[i], dest);
+      if (ret) return ret;
+  }
+
+  return 0;
+}
+
