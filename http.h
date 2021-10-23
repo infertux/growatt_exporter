@@ -3,11 +3,12 @@
 #include <string.h> // strcat()
 //#include <errno.h>
 #include <unistd.h> // close()
+#include <time.h>
 #include <arpa/inet.h> // HTTP stuff
 
 #include "modbus.h"
 
-#define BUFFER_SIZE 4096 // must hold both the HTTP headers and body
+#define BUFFER_SIZE 2048 // must hold both the HTTP headers and body
 #define BACKLOG 10  // passed to listen()
 
 void set_response(char *response)
@@ -48,17 +49,25 @@ int http(const int port)
         return 1;
     }
 
+    printf("HTTP server listening on 127.0.0.1:%d...\n", port);
+
     int client_socket;
     char response[BUFFER_SIZE];
+    struct timespec before, after;
+    double elapsed;
     while(1) {
-        printf("HTTP server listening on 127.0.0.1:%d...\n", port);
         client_socket = accept(server_socket, NULL, NULL);
-
+        clock_gettime(CLOCK_REALTIME, &before);
+        printf("HTTP server received request...\n");
         set_response(response);
-        //printf("response=\"%s\"\n", response);
-
-        send(client_socket, response, sizeof(response), 0);
+        send(client_socket, response, strlen(response), 0);
         close(client_socket);
+        clock_gettime(CLOCK_REALTIME, &after);
+
+        elapsed = after.tv_sec - before.tv_sec +
+                  (double)(after.tv_nsec - before.tv_nsec) / 1e9;
+        printf("HTTP server sent response (%ld bytes) in %.1fs\n",
+               strlen(response), elapsed);
     }
 
     return 1;

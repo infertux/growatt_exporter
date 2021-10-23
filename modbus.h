@@ -80,15 +80,7 @@ int query(char *dest) {
     return bye(ctx, "Set slave failed");
   }
 
-  /* Save original timeout */
-  //uint32_t old_response_to_sec;
-  //uint32_t old_response_to_usec;
-  //modbus_get_response_timeout(ctx, &old_response_to_sec, &old_response_to_usec);
-  //printf("%d %d\n", old_response_to_sec, old_response_to_usec);
-  modbus_set_response_timeout(ctx, 1, 0);
-  //modbus_get_response_timeout(ctx, &old_response_to_sec, &old_response_to_usec);
-  //printf("%d %d\n", old_response_to_sec, old_response_to_usec);
-  // printf("timeout ret %d\n", modbus_set_byte_timeout(ctx, 10, 0));
+  modbus_set_response_timeout(ctx, 1, 0); // 1 second
 
   if (modbus_connect(ctx)) {
     return bye(ctx, "Connection failed");
