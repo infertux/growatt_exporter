@@ -10,8 +10,7 @@
 #define metric(name, value) \
   do { \
     char buffer[256]; \
-    sprintf(buffer, "# HELP %s\n# TYPE %s gauge\n%s%s %f\n", \
-                    name, name, name, labels, value); \
+    sprintf(buffer, "# TYPE %s gauge\n%s%s %lf\n", name, name, labels, value); \
     strcat(dest, buffer); \
   } while (0)
 
@@ -34,7 +33,7 @@ int read_register_raw(modbus_t *ctx, const int addr, int size, uint16_t *buffer)
 }
 
 int read_register(modbus_t *ctx, const int addr, double *value) {
-  uint16_t buffer[1];
+  uint16_t buffer[1] = { 0 };
   int ret = read_register_raw(ctx, addr, 1, buffer);
   if (ret) return ret;
 
@@ -43,24 +42,39 @@ int read_register(modbus_t *ctx, const int addr, double *value) {
   return 0;
 }
 
-int read_register_scaled(modbus_t *ctx, const int addr, double *value) {
-  uint16_t buffer[1];
+int read_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
+  uint16_t buffer[1] = { 0 };
   int ret = read_register_raw(ctx, addr, 1, buffer);
   if (ret) return ret;
 
-  *value = buffer[0] / 100.0;
+  *value = buffer[0] / scale;
+
+  return 0;
+}
+
+int read_register_scaled(modbus_t *ctx, const int addr, double *value) {
+    return read_register_scaled_by(ctx, addr, value, 100.0);
+}
+
+int read_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
+  uint16_t buffer[2] = { 0, 0 };
+  int ret = read_register_raw(ctx, addr, 2, buffer);
+  if (ret) return ret;
+
+  *value = ((double)(buffer[1] << 16) + (double)(buffer[0])) / scale;
+  // if (*value > 4194304.0) { // 2^22
+  //     /* XXX: sometimes we get insanely big numbers usually followed by "Invalid
+  //      * data (112345691)" error on subsequant polls, it seems to fix itself
+  //      * after a few minutes, anything above 2^22 is probaly garbage data so we
+  //      * ignore it */
+  //     return -1;
+  // }
 
   return 0;
 }
 
 int read_register_double_scaled(modbus_t *ctx, const int addr, double *value) {
-  uint16_t buffer[2];
-  int ret = read_register_raw(ctx, addr, 2, buffer);
-  if (ret) return ret;
-
-  *value = (buffer[0] + (buffer[1] << 16)) / 100.0;
-
-  return 0;
+    return read_register_double_scaled_by(ctx, addr, value, 100.0);
 }
 
 int bye(modbus_t *ctx, char *error) {
@@ -72,7 +86,7 @@ int bye(modbus_t *ctx, char *error) {
 int query_device(const int id, char *dest) {
   fprintf(stderr, "Querying device ID %d...\n", id);
 
-  char labels[64];
+  char labels[32];
   sprintf(labels, "{device_id=\"%d\"}", id);
 
   modbus_t *ctx;
@@ -80,7 +94,7 @@ int query_device(const int id, char *dest) {
   // ctx = modbus_new_tcp("192.168.1.X", 8088);
   // ... so we use socat:
   // socat -ls -v pty,link=/tmp/ttyepever123 tcp:192.168.1.X:8088
-  char path[64];
+  char path[32];
   sprintf(path, "/tmp/ttyepever%d", id);
   ctx = modbus_new_rtu(path, 115200, 'N', 8, 1);
   if (ctx == NULL) {
@@ -136,10 +150,10 @@ int query_device(const int id, char *dest) {
   metric("epever_pv_watts", pv_power);
 
   double generated_energy_today;
-  if (read_register_double_scaled(ctx, 0x330C, &generated_energy_today)) {
+  if (read_register_double_scaled_by(ctx, 0x330C, &generated_energy_today, 0.1)) {
       return bye(ctx, "Reading generated energy today failed");
   }
-  metric("epever_generated_energy_today_watthours", generated_energy_today*1000.0);
+  metric("epever_generated_energy_today_watthours", generated_energy_today);
 
   double battery_voltage, battery_current, battery_power, battery_temperature, battery_soc;
   if (read_register_scaled(ctx, 0x3104, &battery_voltage)) {

@@ -1,13 +1,18 @@
-CC=gcc
+CC=clang
 RM=rm -f
-LIBS=$(shell pkg-config --cflags --libs libmodbus)
+CFLAGS=$(shell pkg-config --cflags libmodbus)
+LIBS=$(shell pkg-config --libs libmodbus)
 
-SRCS=epever.c modbus.h http.h
+SRCS=src/epever.c src/*.h
 
-all: epever
+all: epever tidy
 
 epever: $(SRCS)
-	$(CC) $(LIBS) -Wall -Werror -pedantic -o epever $(SRCS)
+	$(CC) $(CFLAGS) $(LIBS) -Wall -Werror -pedantic -o epever src/epever.c
+
+tidy:
+	clang-tidy --checks='*,-llvmlibc-restrict-system-libc-headers' --format-style=llvm src/* -- $(CFLAGS)
+.PHONY: tidy
 
 clean:
 	$(RM) epever
