@@ -60,6 +60,7 @@ int http(const int port)
         clock_gettime(CLOCK_REALTIME, &before);
         printf("HTTP server received request...\n");
         set_response(response);
+        //printf("response=\"%s\"\n", response);
         send(client_socket, response, strlen(response), 0);
         close(client_socket);
         clock_gettime(CLOCK_REALTIME, &after);
