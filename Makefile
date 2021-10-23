@@ -2,7 +2,7 @@ CC=gcc
 RM=rm -f
 LIBS=$(shell pkg-config --cflags --libs libmodbus)
 
-SRCS=modbus.c http.c
+SRCS=epever.c modbus.h http.h
 
 all: epever
 
