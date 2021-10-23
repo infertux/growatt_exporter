@@ -69,14 +69,17 @@ int bye(modbus_t *ctx, char *error) {
   return 1;
 }
 
-int query(char *dest) {
+int query(const int id, char *dest) {
   *dest = '\0'; // make sure buffer is clean
 
   modbus_t *ctx;
 
   //ctx = modbus_new_tcp("192.168.1.41", 502);
   //socat -ls -v pty,link=/home/infertux/ttyV0 tcp:192.168.1.41:502
-  ctx = modbus_new_rtu("/tmp/ttyepever", 115200, 'N', 8, 1);
+  char path[256];
+  sprintf(path, "/tmp/ttyepever%d", id);
+  fprintf(stderr, "path=%s\n", path);
+  ctx = modbus_new_rtu(path, 115200, 'N', 8, 1);
   if (ctx == NULL) {
     return bye(ctx, "Unable to create the libmodbus context");
   }
