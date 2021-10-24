@@ -1,21 +1,21 @@
+#include <errno.h>
+#include <modbus-rtu.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h> // strcat()
-#include <errno.h>
-#include <modbus-rtu.h>
 
 #define DEBUG FALSE
 #define MODBUS_TIMEOUT_ERROR 110
 
-#define metric(name, value) \
-  do { \
-    char buffer[256]; \
+#define metric(name, value)                                                    \
+  do {                                                                         \
+    char buffer[256];                                                          \
     sprintf(buffer, "# TYPE %s gauge\n%s%s %lf\n", name, name, labels, value); \
-    strcat(dest, buffer); \
+    strcat(dest, buffer);                                                      \
   } while (0)
 
-
-int read_register_raw(modbus_t *ctx, const int addr, int size, uint16_t *buffer) {
+int read_register_raw(modbus_t *ctx, const int addr, int size,
+                      uint16_t *buffer) {
   if (modbus_read_input_registers(ctx, addr, size, buffer) == -1) {
     if (errno != MODBUS_TIMEOUT_ERROR) {
       fprintf(stderr, "%s (%d)\n", modbus_strerror(errno), errno);
@@ -33,19 +33,22 @@ int read_register_raw(modbus_t *ctx, const int addr, int size, uint16_t *buffer)
 }
 
 int read_register(modbus_t *ctx, const int addr, double *value) {
-  uint16_t buffer[1] = { 0 };
+  uint16_t buffer[1] = {0};
   int ret = read_register_raw(ctx, addr, 1, buffer);
-  if (ret) return ret;
+  if (ret)
+    return ret;
 
   *value = (double)buffer[0];
 
   return 0;
 }
 
-int read_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
-  uint16_t buffer[1] = { 0 };
+int read_register_scaled_by(modbus_t *ctx, const int addr, double *value,
+                            double scale) {
+  uint16_t buffer[1] = {0};
   int ret = read_register_raw(ctx, addr, 1, buffer);
-  if (ret) return ret;
+  if (ret)
+    return ret;
 
   *value = buffer[0] / scale;
 
@@ -53,19 +56,23 @@ int read_register_scaled_by(modbus_t *ctx, const int addr, double *value, double
 }
 
 int read_register_scaled(modbus_t *ctx, const int addr, double *value) {
-    return read_register_scaled_by(ctx, addr, value, 100.0);
+  return read_register_scaled_by(ctx, addr, value, 100.0);
 }
 
-int read_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
-  uint16_t buffer[2] = { 0, 0 };
+int read_register_double_scaled_by(modbus_t *ctx, const int addr, double *value,
+                                   double scale) {
+  uint16_t buffer[2] = {0, 0};
   int ret = read_register_raw(ctx, addr, 2, buffer);
-  if (ret) return ret;
+  if (ret)
+    return ret;
 
   *value = ((double)(buffer[1] << 16) + (double)(buffer[0])) / scale;
   // if (*value > 4194304.0) { // 2^22
-  //     /* XXX: sometimes we get insanely big numbers usually followed by "Invalid
+  //     /* XXX: sometimes we get insanely big numbers usually followed by
+  //     "Invalid
   //      * data (112345691)" error on subsequant polls, it seems to fix itself
-  //      * after a few minutes, anything above 2^22 is probaly garbage data so we
+  //      * after a few minutes, anything above 2^22 is probaly garbage data so
+  //      we
   //      * ignore it */
   //     return -1;
   // }
@@ -74,12 +81,13 @@ int read_register_double_scaled_by(modbus_t *ctx, const int addr, double *value,
 }
 
 int read_register_double_scaled(modbus_t *ctx, const int addr, double *value) {
-    return read_register_double_scaled_by(ctx, addr, value, 100.0);
+  return read_register_double_scaled_by(ctx, addr, value, 100.0);
 }
 
 int bye(modbus_t *ctx, char *error) {
   fprintf(stderr, "%s: %s (%d)\n", error, modbus_strerror(errno), errno);
-  if (ctx != NULL) modbus_free(ctx);
+  if (ctx != NULL)
+    modbus_free(ctx);
   return 1;
 }
 
@@ -109,7 +117,7 @@ int query_device(const int id, char *dest) {
     return bye(ctx, "Set slave failed");
   }
 
-  modbus_set_response_timeout(ctx, 1, 0); // 1 second
+  modbus_set_response_timeout(ctx, 5, 0); // 5 seconds
 
   if (modbus_connect(ctx)) {
     return bye(ctx, "Connection failed");
@@ -129,8 +137,8 @@ int query_device(const int id, char *dest) {
   }
   metric("epever_charging_status", charging_status);
 
-  //double rated_current;
-  //if (read_register_scaled(ctx, 0x3001, &rated_current)) {
+  // double rated_current;
+  // if (read_register_scaled(ctx, 0x3001, &rated_current)) {
   //  return bye(ctx, "Reading rated_current failed");
   //}
   // printf("rated_current = %.0f A\n", rated_current);
@@ -150,37 +158,40 @@ int query_device(const int id, char *dest) {
   metric("epever_pv_watts", pv_power);
 
   double generated_energy_today;
-  if (read_register_double_scaled_by(ctx, 0x330C, &generated_energy_today, 0.1)) {
-      return bye(ctx, "Reading generated energy today failed");
+  if (read_register_double_scaled_by(ctx, 0x330C, &generated_energy_today,
+                                     0.1)) {
+    return bye(ctx, "Reading generated energy today failed");
   }
   metric("epever_generated_energy_today_watthours", generated_energy_today);
 
-  double battery_voltage, battery_current, battery_power, battery_temperature, battery_soc;
+  double battery_voltage, battery_current, battery_power, battery_temperature,
+      battery_soc;
   if (read_register_scaled(ctx, 0x3104, &battery_voltage)) {
-      return bye(ctx, "Reading battery voltage failed");
+    return bye(ctx, "Reading battery voltage failed");
   }
   metric("epever_battery_volts", battery_voltage);
   if (read_register_scaled(ctx, 0x3105, &battery_current)) {
-      return bye(ctx, "Reading battery current failed");
+    return bye(ctx, "Reading battery current failed");
   }
   metric("epever_battery_amperes", battery_current);
   if (read_register_double_scaled(ctx, 0x3106, &battery_power)) {
-      return bye(ctx, "Reading battery power failed");
+    return bye(ctx, "Reading battery power failed");
   }
   metric("epever_battery_watts", battery_power);
   if (read_register_scaled(ctx, 0x3110, &battery_temperature)) {
-      return bye(ctx, "Reading battery temperature failed");
+    return bye(ctx, "Reading battery temperature failed");
   }
   metric("epever_battery_temperature_celsius", battery_temperature);
   if (read_register_scaled(ctx, 0x311A, &battery_soc)) {
-      return bye(ctx, "Reading battery SOC failed");
+    return bye(ctx, "Reading battery SOC failed");
   }
   metric("epever_battery_soc", battery_soc);
 
-  //double battery_min, battery_max;
-  //read_register_scaled(ctx, 0x3303, &battery_min);
-  //read_register_scaled(ctx, 0x3302, &battery_max);
-  //printf("battery today: %.2f V min | %.2f V max\n", battery_min, battery_max);
+  // double battery_min, battery_max;
+  // read_register_scaled(ctx, 0x3303, &battery_min);
+  // read_register_scaled(ctx, 0x3302, &battery_max);
+  // printf("battery today: %.2f V min | %.2f V max\n", battery_min,
+  // battery_max);
 
   modbus_close(ctx);
   modbus_free(ctx);
@@ -193,10 +204,10 @@ int query(const int *ids, char *dest) {
 
   int ret;
   for (int i = 0; ids[i] >= 0; i++) {
-      ret = query_device(ids[i], dest);
-      if (ret) return ret;
+    ret = query_device(ids[i], dest);
+    if (ret)
+      return ret;
   }
 
   return 0;
 }
-
