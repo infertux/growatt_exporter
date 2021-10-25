@@ -2,6 +2,9 @@
 #include <errno.h>
 #include <modbus-rtu.h>
 #include <stdio.h>
+#include <time.h>
+
+#define TIMEZONE_BIAS (7 * 3600)
 
 #define DEBUG FALSE
 #define MODBUS_TIMEOUT_ERROR 110
@@ -23,14 +26,25 @@
 
 #define REGISTER_ENERGY_GENERATED_TODAY 0x330C
 
+#define REGISTER_CLOCK 0x9013
+
 #define metric(name, value)                                                    \
   do {                                                                         \
     char buffer[256];                                                          \
     snprintf(buffer, sizeof(buffer), "# TYPE %s gauge\n%s%s %lf\n", name,      \
              name, labels, value);                                             \
-    strlcat(dest, buffer, 256);                                                \
+    strcat(dest, buffer);                                                      \
   } while (0)
 
+int read_holding_registers(modbus_t *ctx, const int addr, int size,
+                           uint16_t *buffer) {
+  if (modbus_read_registers(ctx, addr, size, buffer) == -1) {
+    fprintf(stderr, "%s (%d)\n", modbus_strerror(errno), errno);
+    return -1;
+  }
+
+  return 0;
+}
 int read_register_raw(modbus_t *ctx, const int addr, int size,
                       uint16_t *buffer) {
   if (modbus_read_input_registers(ctx, addr, size, buffer) == -1) {
@@ -105,11 +119,52 @@ int read_register_double_scaled(modbus_t *ctx, const int addr, double *value) {
 }
 
 int bye(modbus_t *ctx, char *error) {
-  fprintf(stderr, "%s: %s (%d)\n", error, modbus_strerror(errno), errno);
+  if (errno) {
+    fprintf(stderr, "%s: %s (%d)\n", error, modbus_strerror(errno), errno);
+  }
+
   if (ctx) {
     modbus_free(ctx);
   }
-  return 1;
+
+  return (errno ? errno : 9001);
+}
+
+int sync_time(modbus_t *ctx) {
+  uint16_t clock[3] = {0, 0, 0};
+  if (read_holding_registers(ctx, REGISTER_CLOCK, 3, clock)) {
+    return bye(ctx, "Reading clock failed");
+  }
+
+  struct tm clock_tm = {
+      clock[0] & 0xff,       // seconds
+      clock[0] >> 8,         // minutes
+      clock[1] & 0xff,       // hours
+      clock[1] >> 8,         // day
+      (clock[2] & 0xff) - 1, // month
+      (clock[2] >> 8) + 100, // year
+  };
+  const time_t clock_time_t = mktime(&clock_tm);
+  const time_t now = time(NULL) + TIMEZONE_BIAS;
+  const double difference = difftime(clock_time_t, now);
+
+  if (difference >= 60) {
+    fprintf(stderr, "Device time is %.0lfs ahead!\n", difference);
+
+    char time_string[sizeof "2011-10-08T07:07:09Z"];
+    strftime(time_string, sizeof time_string, "%FT%T", &clock_tm);
+    fprintf(stderr, "device time = %s\n", time_string);
+
+    const struct tm *now_tm = gmtime(&now);
+    strftime(time_string, sizeof time_string, "%FT%T", now_tm);
+    fprintf(stderr, "        now = %s\n", time_string);
+
+    // TODO: sync device time
+
+    return (int)difference;
+  }
+
+  return 0;
 }
 
 int query_device(const int id, char *dest) {
@@ -144,7 +199,10 @@ int query_device(const int id, char *dest) {
     return bye(ctx, "Connection failed");
   }
 
-  // TODO: sync time from PC during first minute of each hour
+  if (sync_time(ctx)) {
+    return bye(ctx, "Synced time");
+  }
+  // fprintf(stderr, "debug=0x%X\n", debug);
 
   double battery_status = 0;
   if (read_register(ctx, REGISTER_BATTERY_STATUS, &battery_status)) {
