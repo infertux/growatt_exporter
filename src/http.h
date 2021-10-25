@@ -1,8 +1,6 @@
-#include <stdio.h>
-//#include <stdlib.h>
-#include <string.h> // strcat()
-//#include <errno.h>
 #include <arpa/inet.h> // HTTP stuff
+#include <bsd/string.h>
+#include <stdio.h>
 #include <time.h>
 #include <unistd.h> // close()
 
@@ -10,24 +8,23 @@
 
 #define BUFFER_SIZE 4096 // must hold both the HTTP headers and body
 #define BACKLOG 10       // passed to listen()
+#define PROMETHEUS_CONTENT_TYPE "text/plain; version=0.0.4; charset=utf-8"
 
 void set_response(const int *ids, char *response) {
   char metrics[BUFFER_SIZE];
 
   if (query(ids, metrics)) {
     fprintf(stderr, "Modbus query failed\n");
-    strcpy(response, "HTTP/1.1 503 Service Unavailable\r\n");
-    strcat(response, "Server: epever-modbus\r\n");
+    strlcpy(response, "HTTP/1.1 503 Service Unavailable\r\n", BUFFER_SIZE);
+    strlcat(response, "Server: epever-modbus\r\n", BUFFER_SIZE);
   } else {
-    strcpy(response, "HTTP/1.1 200 OK\r\n");
-    strcat(response, "Server: epever-modbus\r\n");
-    strcat(response,
-           "Content-Type: text/plain; version=0.0.4; charset=utf-8\r\n");
-    strcat(response, "\r\n");
-    strcat(response, metrics);
+    strlcpy(response, "HTTP/1.1 200 OK\r\n", BUFFER_SIZE);
+    strlcat(response, "Server: epever-modbus\r\n", BUFFER_SIZE);
+    strlcat(response, "Content-Type: ", BUFFER_SIZE);
+    strlcat(response, PROMETHEUS_CONTENT_TYPE, BUFFER_SIZE);
+    strlcat(response, "\r\n\r\n", BUFFER_SIZE);
+    strlcat(response, metrics, BUFFER_SIZE);
   }
-
-  strcat(response, "\0");
 }
 
 int http(const int port, const int *ids) {
@@ -41,22 +38,23 @@ int http(const int port, const int *ids) {
   address.sin_port = htons(port);
   address.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-  bind(server_socket, (struct sockaddr *)&address, sizeof(address));
+  if (bind(server_socket, (struct sockaddr *)&address, sizeof(address))) {
+    fprintf(stderr, "bind failed\n");
+    return 1;
+  }
 
   int listening = listen(server_socket, BACKLOG);
   if (listening < 0) {
-    fprintf(stderr, "The server is not listening.\n");
+    fprintf(stderr, "The server is not listening\n");
     return 1;
   }
 
   printf("HTTP server listening on 127.0.0.1:%d...\n", port);
 
-  int client_socket;
   char response[BUFFER_SIZE];
   struct timespec before, after;
-  double elapsed;
   while (1) {
-    client_socket = accept(server_socket, NULL, NULL);
+    const int client_socket = accept(server_socket, NULL, NULL);
     clock_gettime(CLOCK_REALTIME, &before);
     printf("HTTP server received request...\n");
     set_response(ids, response);
@@ -65,8 +63,8 @@ int http(const int port, const int *ids) {
     close(client_socket);
     clock_gettime(CLOCK_REALTIME, &after);
 
-    elapsed = after.tv_sec - before.tv_sec +
-              (double)(after.tv_nsec - before.tv_nsec) / 1e9;
+    const double elapsed = after.tv_sec - before.tv_sec +
+                           (double)(after.tv_nsec - before.tv_nsec) / 1e9;
     printf("HTTP server sent response (%ld bytes) in %.1fs\n", strlen(response),
            elapsed);
   }
