@@ -1,7 +1,7 @@
 CC=clang
 RM=rm -f
 CFLAGS=$(shell pkg-config --cflags libbsd libmodbus)
-LIBS=$(shell pkg-config --libs libbsd libmodbus)
+LIBS=$(shell pkg-config --libs libbsd libmodbus) -pthread
 
 SRCS=src/epever.c src/*.h
 

@@ -1,33 +1,36 @@
 #include <arpa/inet.h> // HTTP stuff
 #include <bsd/string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <unistd.h> // close()
 
+#include "epever.h"
 #include "modbus.h"
 
-#define BUFFER_SIZE 4096 // must hold both the HTTP headers and body
-#define BACKLOG 10       // passed to listen()
+#define BACKLOG 10 // passed to listen()
 #define PROMETHEUS_CONTENT_TYPE "text/plain; version=0.0.4; charset=utf-8"
 
-void set_response(const int *ids, char *response) {
-  char metrics[BUFFER_SIZE];
+void set_response(const uint8_t *ids, char *response) {
+  char metrics[PROMETHEUS_RESPONSE_SIZE];
+  int code;
 
-  if (query(ids, metrics)) {
-    fprintf(stderr, "Modbus query failed\n");
-    strlcpy(response, "HTTP/1.1 503 Service Unavailable\r\n", BUFFER_SIZE);
-    strlcat(response, "Server: epever-modbus\r\n", BUFFER_SIZE);
+  if ((code = query(metrics, ids))) {
+    fprintf(FD_INFO, "Modbus query failed (code %d)\n", code);
+    strlcpy(response, "HTTP/1.1 503 Service Unavailable\r\n",
+            PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
   } else {
-    strlcpy(response, "HTTP/1.1 200 OK\r\n", BUFFER_SIZE);
-    strlcat(response, "Server: epever-modbus\r\n", BUFFER_SIZE);
-    strlcat(response, "Content-Type: ", BUFFER_SIZE);
-    strlcat(response, PROMETHEUS_CONTENT_TYPE, BUFFER_SIZE);
-    strlcat(response, "\r\n\r\n", BUFFER_SIZE);
-    strlcat(response, metrics, BUFFER_SIZE);
+    strlcpy(response, "HTTP/1.1 200 OK\r\n", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, "Content-Type: ", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, PROMETHEUS_CONTENT_TYPE, PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, "\r\n\r\n", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, metrics, PROMETHEUS_RESPONSE_SIZE);
   }
 }
 
-int http(const int port, const int *ids) {
+int http(const int port, const uint8_t *ids) {
   int server_socket = socket(AF_INET,     // IPv4
                              SOCK_STREAM, // TCP
                              0            // protocol 0
@@ -39,35 +42,35 @@ int http(const int port, const int *ids) {
   address.sin_addr.s_addr = inet_addr("127.0.0.1");
 
   if (bind(server_socket, (struct sockaddr *)&address, sizeof(address))) {
-    fprintf(stderr, "bind failed\n");
-    return 1;
+    fprintf(FD_ERROR, "bind failed\n");
+    return EXIT_FAILURE;
   }
 
   int listening = listen(server_socket, BACKLOG);
   if (listening < 0) {
-    fprintf(stderr, "The server is not listening\n");
-    return 1;
+    fprintf(FD_ERROR, "The server is not listening\n");
+    return EXIT_FAILURE;
   }
 
-  printf("HTTP server listening on 127.0.0.1:%d...\n", port);
+  fprintf(FD_INFO, "HTTP server listening on 127.0.0.1:%d...\n", port);
 
-  char response[BUFFER_SIZE];
+  char response[PROMETHEUS_RESPONSE_SIZE];
   struct timespec before, after;
   while (1) {
     const int client_socket = accept(server_socket, NULL, NULL);
     clock_gettime(CLOCK_REALTIME, &before);
-    printf("HTTP server received request...\n");
+    fprintf(FD_DEBUG, "HTTP server received request...\n");
     set_response(ids, response);
-    // printf("response=\"%s\"\n", response);
+    // printf("response=\"\n%s\n\"\n", response);
     send(client_socket, response, strlen(response), 0);
     close(client_socket);
     clock_gettime(CLOCK_REALTIME, &after);
 
     const double elapsed = after.tv_sec - before.tv_sec +
                            (double)(after.tv_nsec - before.tv_nsec) / 1e9;
-    printf("HTTP server sent response (%ld bytes) in %.1fs\n", strlen(response),
-           elapsed);
+    fprintf(FD_DEBUG, "HTTP server sent response (%ld bytes) in %.1fs\n",
+            strlen(response), elapsed);
   }
 
-  return 1;
+  return EXIT_FAILURE;
 }
