@@ -56,9 +56,10 @@ int http(const uint16_t port, const uint8_t *ids) {
           port);
 
   char response[PROMETHEUS_RESPONSE_SIZE];
-  struct timespec before, after;
+  struct timespec before, after; // NOLINT(readability-isolate-declaration)
   while (1) {
-    const int client_socket = accept(server_socket, NULL, NULL);
+    const int client_socket =
+        accept(server_socket, NULL, NULL); // NOLINT(android-cloexec-accept)
     clock_gettime(CLOCK_REALTIME, &before);
     fprintf(LOG_DEBUG, "HTTP server received request...\n");
     set_response(ids, response);
@@ -69,7 +70,7 @@ int http(const uint16_t port, const uint8_t *ids) {
 
     const double elapsed = after.tv_sec - before.tv_sec +
                            (double)(after.tv_nsec - before.tv_nsec) / 1e9;
-    fprintf(LOG_DEBUG, "HTTP server sent response (%ld bytes) in %.1fs\n",
+    fprintf(LOG_DEBUG, "HTTP server sent response (%ld bytes) in %.1fs\n\n",
             strlen(response), elapsed);
   }
 

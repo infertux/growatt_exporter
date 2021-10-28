@@ -18,10 +18,15 @@
 
 #define DEBUG FALSE
 
-#define PROMETHEUS_RESPONSE_SIZE 8192
-#define PROMETHEUS_METRIC_SIZE 256
+#define PROMETHEUS_RESPONSE_SIZE 8192U
+#define PROMETHEUS_METRIC_SIZE 256U
 
-#define MODBUS_RESPONSE_TIMEOUT 5
+#define MODBUS_BAUD 115200
+#define MODBUS_PARITY 'N'
+#define MODBUS_DATA_BIT 8
+#define MODBUS_STOP_BIT 1
+
+#define MODBUS_RESPONSE_TIMEOUT 3
 
 #define REGISTER_SIZE 16U
 #define REGISTER_HALF_SIZE (REGISTER_SIZE / 2)
@@ -60,16 +65,22 @@
 #define REGISTER_SETTINGS_LENGTH_OF_NIGHT 0x9065
 #define REGISTER_CLOCK 0x9013
 
+#define CLOCK_OFFSET_THRESHOLD 30 // seconds
+
 #define add_metric(name, value)                                                \
   do {                                                                         \
     char buffer[PROMETHEUS_METRIC_SIZE];                                       \
     snprintf(buffer, sizeof(buffer),                                           \
              "# TYPE epever_%s gauge\nepever_%s{%s} %lf\n", name, name,        \
              device_id_label, value);                                          \
-    strcat(dest, buffer);                                                      \
                                                                                \
-    if (strcmp(name, "read_metric_failed_total") &&                            \
-        strcmp(name, "read_metric_succeeded_total")) {                         \
+    const uint16_t len = strlcat(dest, buffer, PROMETHEUS_RESPONSE_SIZE);      \
+    if (len >= PROMETHEUS_RESPONSE_SIZE) {                                     \
+      return query_device_failed(ctx, id, "buffer overflow");                  \
+    }                                                                          \
+                                                                               \
+    if (strcmp(name, "read_metric_failed_total") != 0 &&                       \
+        strcmp(name, "read_metric_succeeded_total") != 0) {                    \
       read_metric_succeeded_total[id]++;                                       \
     }                                                                          \
   } while (0)
@@ -147,19 +158,20 @@ int sync_time(modbus_t *ctx) {
     return INT_MAX;
   }
 
+  const int year_offset = 100;
   struct tm clock_tm = {
-      clock[0] & REGISTER_HALF_MASK,          // seconds
-      clock[0] >> REGISTER_HALF_SIZE,         // minutes
-      clock[1] & REGISTER_HALF_MASK,          // hours
-      clock[1] >> REGISTER_HALF_SIZE,         // day
-      (clock[2] & REGISTER_HALF_MASK) - 1,    // month
-      (clock[2] >> REGISTER_HALF_SIZE) + 100, // year
+      (int)(clock[0] & REGISTER_HALF_MASK),           // seconds
+      (clock[0] >> REGISTER_HALF_SIZE),               // minutes
+      (int)(clock[1] & REGISTER_HALF_MASK),           // hours
+      (clock[1] >> REGISTER_HALF_SIZE),               // day
+      (int)(clock[2] & REGISTER_HALF_MASK) - 1,       // month
+      (clock[2] >> REGISTER_HALF_SIZE) + year_offset, // year;
   };
   const time_t clock_time_t = mktime(&clock_tm);
   const time_t now = time(NULL) + TIMEZONE_BIAS;
   const double difference = difftime(clock_time_t, now);
 
-  if (difference > 30) {
+  if (difference >= CLOCK_OFFSET_THRESHOLD) {
     fprintf(LOG_ERROR, "Device time is %.0lfs ahead!\n", difference);
 
     char time_string[sizeof "2011-10-08T07:07:09Z"];
@@ -180,7 +192,7 @@ int sync_time(modbus_t *ctx) {
 
 int query_device_failed(modbus_t *ctx, const uint8_t id, const char *message) {
   if (errno) {
-    fprintf(LOG_ERROR, "[Device " PRIu8 "] %s: %s (%d)\n", message,
+    fprintf(LOG_ERROR, "[Device %" PRIu8 "] %s: %s (%d)\n", id, message,
             modbus_strerror(errno), errno);
   }
 
@@ -226,7 +238,8 @@ int query_device_thread(void *id_ptr) {
   // socat -ls -v pty,link=/tmp/ttyepever123 tcp:192.168.1.X:8088
   char path[32];
   snprintf(path, sizeof(path), "/tmp/ttyepever%" PRIu8, id);
-  ctx = modbus_new_rtu(path, 115200, 'N', 8, 1);
+  ctx = modbus_new_rtu(path, MODBUS_BAUD, MODBUS_PARITY, MODBUS_DATA_BIT,
+                       MODBUS_STOP_BIT);
   if (ctx == NULL) {
     return query_device_failed(ctx, id,
                                "Unable to create the libmodbus context");
@@ -324,18 +337,22 @@ int query_device_thread(void *id_ptr) {
   }
 
   double energy_generated_today = 0;
-  if (-1 == read_input_register_double_scaled_by(
-                ctx, REGISTER_ENERGY_GENERATED_TODAY, &energy_generated_today,
-                1000.0 / 100.0)) {
+  if (-1 ==
+      read_input_register_double_scaled_by(
+          ctx, REGISTER_ENERGY_GENERATED_TODAY, &energy_generated_today,
+          // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+          1000.0 / 100.0)) {
     read_register_failed(id, "energy generated today");
   } else {
     add_metric("energy_generated_today_watthours", energy_generated_today);
   }
 
   double energy_generated_total = 0;
-  if (-1 == read_input_register_double_scaled_by(
-                ctx, REGISTER_ENERGY_GENERATED_TOTAL, &energy_generated_total,
-                1000.0 / 100.0)) {
+  if (-1 ==
+      read_input_register_double_scaled_by(
+          ctx, REGISTER_ENERGY_GENERATED_TOTAL, &energy_generated_total,
+          // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+          1000.0 / 100.0)) {
     read_register_failed(id, "energy generated total");
   } else {
     add_metric("energy_generated_total_watthours", energy_generated_total);
@@ -435,17 +452,19 @@ int query_device_thread(void *id_ptr) {
     }
 
     double boost_duration = 0;
-    if (-1 == read_holding_register_scaled_by(ctx,
-                                              REGISTER_SETTINGS_BOOST_DURATION,
-                                              &boost_duration, 60.0)) {
+    if (-1 ==
+        read_holding_register_scaled_by(
+            ctx, REGISTER_SETTINGS_BOOST_DURATION, &boost_duration,
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+            60.0)) {
       read_register_failed(id, "boost duration");
     } else {
       add_metric("settings_boost_duration_seconds", boost_duration);
     }
 
     uint16_t length_of_night_buffer = 0;
-    if (-1 == modbus_read_registers(ctx, REGISTER_SETTINGS_LENGTH_OF_NIGHT, 1,
-                                    &length_of_night_buffer)) {
+    if (-1 == read_holding_registers(ctx, REGISTER_SETTINGS_LENGTH_OF_NIGHT, 1,
+                                     &length_of_night_buffer)) {
       read_register_failed(id, "length of night");
     } else {
       const double hour =
@@ -473,7 +492,7 @@ int query(char *dest, const uint8_t *ids) {
   *dest = '\0'; // empty buffer content from previous queries
 
   int count = 0;
-  while (ids[++count])
+  while (ids[++count]) // NOLINT: counting ids until we get a zero value
     ;
   fprintf(LOG_DEBUG, "Found %d device IDs to query\n", count);
 
@@ -502,14 +521,17 @@ int query(char *dest, const uint8_t *ids) {
     } else {
       const uint8_t id = ids[i];
       const char *metrics = device_metrics[id];
-      // fprintf(LOG_DEBUG, "Metrics from device ID %" PRIu8 ":\n%s\n\n", id,
-      // metrics);
-      fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 "\n", id);
-      fprintf(LOG_DEBUG, "length = %lu\n", strlen(metrics));
-      strcat(dest, metrics);
+      fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%lu bytes)\n",
+              id, strlen(metrics));
+
+      const uint16_t len = strlcat(dest, metrics, PROMETHEUS_RESPONSE_SIZE);
+      if (len >= PROMETHEUS_RESPONSE_SIZE) {
+        fprintf(LOG_ERROR, "buffer overflow: %" PRIu16 " >= %i\n", len,
+                PROMETHEUS_RESPONSE_SIZE);
+
+        return ENAMETOOLONG;
+      }
     }
   }
-  //  strlcat(dest, device_metrics, PROMETHEUS_RESPONSE_SIZE);
-
   return EXIT_SUCCESS;
 }
