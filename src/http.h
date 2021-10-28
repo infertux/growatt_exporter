@@ -13,10 +13,10 @@
 
 void set_response(const uint8_t *ids, char *response) {
   char metrics[PROMETHEUS_RESPONSE_SIZE];
-  int code;
+  int code = 0;
 
   if ((code = query(metrics, ids))) {
-    fprintf(FD_INFO, "Modbus query failed (code %d)\n", code);
+    fprintf(LOG_INFO, "Modbus query failed (code %d)\n", code);
     strlcpy(response, "HTTP/1.1 503 Service Unavailable\r\n",
             PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
@@ -30,7 +30,7 @@ void set_response(const uint8_t *ids, char *response) {
   }
 }
 
-int http(const int port, const uint8_t *ids) {
+int http(const uint16_t port, const uint8_t *ids) {
   int server_socket = socket(AF_INET,     // IPv4
                              SOCK_STREAM, // TCP
                              0            // protocol 0
@@ -42,24 +42,25 @@ int http(const int port, const uint8_t *ids) {
   address.sin_addr.s_addr = inet_addr("127.0.0.1");
 
   if (bind(server_socket, (struct sockaddr *)&address, sizeof(address))) {
-    fprintf(FD_ERROR, "bind failed\n");
+    fprintf(LOG_ERROR, "bind failed\n");
     return EXIT_FAILURE;
   }
 
   int listening = listen(server_socket, BACKLOG);
   if (listening < 0) {
-    fprintf(FD_ERROR, "The server is not listening\n");
+    fprintf(LOG_ERROR, "The server is not listening\n");
     return EXIT_FAILURE;
   }
 
-  fprintf(FD_INFO, "HTTP server listening on 127.0.0.1:%d...\n", port);
+  fprintf(LOG_INFO, "HTTP server listening on 127.0.0.1:%" PRIu16 "...\n",
+          port);
 
   char response[PROMETHEUS_RESPONSE_SIZE];
   struct timespec before, after;
   while (1) {
     const int client_socket = accept(server_socket, NULL, NULL);
     clock_gettime(CLOCK_REALTIME, &before);
-    fprintf(FD_DEBUG, "HTTP server received request...\n");
+    fprintf(LOG_DEBUG, "HTTP server received request...\n");
     set_response(ids, response);
     // printf("response=\"\n%s\n\"\n", response);
     send(client_socket, response, strlen(response), 0);
@@ -68,7 +69,7 @@ int http(const int port, const uint8_t *ids) {
 
     const double elapsed = after.tv_sec - before.tv_sec +
                            (double)(after.tv_nsec - before.tv_nsec) / 1e9;
-    fprintf(FD_DEBUG, "HTTP server sent response (%ld bytes) in %.1fs\n",
+    fprintf(LOG_DEBUG, "HTTP server sent response (%ld bytes) in %.1fs\n",
             strlen(response), elapsed);
   }
 
