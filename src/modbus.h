@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h> // INT_MAX
+#include <math.h>
 #include <modbus-rtu.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,6 +97,7 @@ time_t last_time_read_settings_at[MAX_DEVICE_ID + 1] = {0};
 
 #define read_input_registers modbus_read_input_registers
 #define read_holding_registers modbus_read_registers
+#define write_holding_registers modbus_write_registers
 
 int read_input_register(modbus_t *ctx, const int addr, double *value) {
   uint16_t buffer[1] = {0};
@@ -151,12 +153,39 @@ int read_input_register_double_scaled(modbus_t *ctx, const int addr,
   return read_input_register_double_scaled_by(ctx, addr, value, 1.0 / 100.0);
 }
 
-int sync_time(modbus_t *ctx) {
+void clock_write(modbus_t *ctx) {
+  const time_t now = time(NULL) + TIMEZONE_BIAS +
+                     2; // adding 2 seconds because writing registers is slow so
+                        // we need to compensate for it
+  const struct tm *tm = gmtime(&now);
+  const uint16_t year_offset = 100;
+
+  const uint16_t clock[3] = {
+      ((uint16_t)tm->tm_min << REGISTER_HALF_SIZE) + (uint8_t)tm->tm_sec,
+      ((uint16_t)tm->tm_mday << REGISTER_HALF_SIZE) + (uint8_t)tm->tm_hour,
+      (((uint16_t)tm->tm_year - year_offset) << REGISTER_HALF_SIZE) +
+          (uint8_t)tm->tm_mon + 1,
+  };
+
+  fprintf(LOG_DEBUG, "About to write %04X·%04X·%04X into clock register\n",
+          clock[2], clock[1], clock[0]);
+
+  if (3 != write_holding_registers(ctx, REGISTER_CLOCK, 3, clock)) {
+    fprintf(LOG_ERROR, "Writing clock failed\n");
+  } else {
+    fprintf(LOG_INFO, "Writing clock succeeded\n");
+  }
+}
+
+int clock_sync(modbus_t *ctx) {
   uint16_t clock[3] = {0, 0, 0};
   if (-1 == read_holding_registers(ctx, REGISTER_CLOCK, 3, clock)) {
     fprintf(LOG_ERROR, "Reading clock failed\n");
     return INT_MAX;
   }
+
+  fprintf(LOG_DEBUG, "Clock register is %04X·%04X·%04X\n", clock[2], clock[1],
+          clock[0]);
 
   const int year_offset = 100;
   struct tm clock_tm = {
@@ -171,7 +200,7 @@ int sync_time(modbus_t *ctx) {
   const time_t now = time(NULL) + TIMEZONE_BIAS;
   const double difference = difftime(clock_time_t, now);
 
-  if (difference >= CLOCK_OFFSET_THRESHOLD) {
+  if (fabs(difference) >= CLOCK_OFFSET_THRESHOLD) {
     fprintf(LOG_ERROR, "Device time is %.0lfs ahead!\n", difference);
 
     char time_string[sizeof "2011-10-08T07:07:09Z"];
@@ -182,9 +211,11 @@ int sync_time(modbus_t *ctx) {
     strftime(time_string, sizeof time_string, "%FT%T", now_tm);
     fprintf(LOG_ERROR, "        now = %s\n", time_string);
 
-    // TODO: sync device time
+    clock_write(ctx);
 
     return (int)difference;
+  } else {
+    fprintf(LOG_INFO, "Device time is %.0lfs ahead\n", difference);
   }
 
   return EXIT_SUCCESS;
@@ -271,9 +302,9 @@ int query_device_thread(void *id_ptr) {
   fprintf(LOG_DEBUG, "last_time_synced_at[%" PRIu8 "] = %lf\n", id,
           difftime(now, last_time_synced_at[id]));
   if (difftime(now, last_time_synced_at[id]) > 24 * HOURS) {
-    // if (sync_time(ctx)) {
-    //  fprintf(LOG_ERROR, "Synced time");
-    //}
+    if (clock_sync(ctx)) {
+      fprintf(LOG_ERROR, "Synced time\n");
+    }
 
     last_time_synced_at[id] = now;
   }
@@ -515,10 +546,12 @@ int query(char *dest, const uint8_t *ids) {
   }
 
   for (int i = 0; i < count; i++) {
-    if (thrd_join(threads[i], NULL) != thrd_success) {
-      fprintf(LOG_ERROR, "Thread %d failed\n", i);
+    int result = 0;
+    if (thrd_join(threads[i], &result) != thrd_success) {
+      fprintf(LOG_ERROR, "Thread %d failed (code = %d)\n", i, result);
       // return EXIT_FAILURE;
     } else {
+      fprintf(LOG_ERROR, "Thread %d succeeded (code = %d)\n", i, result);
       const uint8_t id = ids[i];
       const char *metrics = device_metrics[id];
       fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%lu bytes)\n",
