@@ -31,15 +31,15 @@ void set_response(const uint8_t *ids, char *response) {
 }
 
 int http(const uint16_t port, const uint8_t *ids) {
-  int server_socket = socket(AF_INET,     // IPv4
+  int server_socket = socket(AF_INET6,    // IPv6
                              SOCK_STREAM, // TCP
                              0            // protocol 0
   );
 
-  struct sockaddr_in address;
-  address.sin_family = AF_INET;
-  address.sin_port = htons(port);
-  address.sin_addr.s_addr = inet_addr("127.0.0.1");
+  struct sockaddr_in6 address;
+  address.sin6_family = AF_INET6;
+  address.sin6_addr = in6addr_any;
+  address.sin6_port = htons(port);
 
   if (bind(server_socket, (struct sockaddr *)&address, sizeof(address))) {
     fprintf(LOG_ERROR, "bind failed\n");
@@ -52,8 +52,7 @@ int http(const uint16_t port, const uint8_t *ids) {
     return EXIT_FAILURE;
   }
 
-  fprintf(LOG_INFO, "HTTP server listening on 127.0.0.1:%" PRIu16 "...\n",
-          port);
+  fprintf(LOG_INFO, "HTTP server listening on [::]:%" PRIu16 "...\n", port);
 
   char response[PROMETHEUS_RESPONSE_SIZE];
   struct timespec before, after; // NOLINT(readability-isolate-declaration)
