@@ -21,8 +21,12 @@ void set_response(const uint8_t *ids, char *response) {
             PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
   } else {
+    char content_length[PROMETHEUS_RESPONSE_SIZE];
+    sprintf(content_length, "Content-Length: %zu\r\n", strlen(metrics));
+
     strlcpy(response, "HTTP/1.1 200 OK\r\n", PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, content_length, PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "Content-Type: ", PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, PROMETHEUS_CONTENT_TYPE, PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "\r\n\r\n", PROMETHEUS_RESPONSE_SIZE);
@@ -64,7 +68,6 @@ int http(const uint16_t port, const uint8_t *ids) {
     set_response(ids, response);
     // printf("response=\"\n%s\n\"\n", response);
     send(client_socket, response, strlen(response), 0);
-    close(client_socket);
     clock_gettime(CLOCK_REALTIME, &after);
 
     const double elapsed = after.tv_sec - before.tv_sec +
