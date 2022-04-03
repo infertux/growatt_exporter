@@ -554,7 +554,7 @@ int query(char *dest, const uint8_t *ids) {
       fprintf(LOG_ERROR, "Thread %d succeeded (code = %d)\n", i, result);
       const uint8_t id = ids[i];
       const char *metrics = device_metrics[id];
-      fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%lu bytes)\n",
+      fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%zu bytes)\n",
               id, strlen(metrics));
 
       const uint16_t len = strlcat(dest, metrics, PROMETHEUS_RESPONSE_SIZE);
