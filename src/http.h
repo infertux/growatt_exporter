@@ -61,13 +61,27 @@ int http(const uint16_t port, const uint8_t *ids) {
   char response[PROMETHEUS_RESPONSE_SIZE];
   struct timespec before, after; // NOLINT(readability-isolate-declaration)
   while (1) {
+    fprintf(LOG_DEBUG, "HTTP server waiting for request...\n");
     const int client_socket =
         accept(server_socket, NULL, NULL); // NOLINT(android-cloexec-accept)
     clock_gettime(CLOCK_REALTIME, &before);
     fprintf(LOG_DEBUG, "HTTP server received request...\n");
     set_response(ids, response);
     // printf("response=\"\n%s\n\"\n", response);
-    send(client_socket, response, strlen(response), 0);
+
+    const size_t expected_size = strlen(response);
+    const size_t actual_size = write(client_socket, response, expected_size);
+    if (actual_size != expected_size) {
+      fprintf(LOG_ERROR, "Wrote %zu bytes instead of %zu\n", actual_size,
+              expected_size);
+      return EXIT_FAILURE;
+    }
+
+    if (close(client_socket)) {
+      fprintf(LOG_ERROR, "Error %d closing socket\n", errno);
+      return EXIT_FAILURE;
+    }
+
     clock_gettime(CLOCK_REALTIME, &after);
 
     const double elapsed = after.tv_sec - before.tv_sec +
