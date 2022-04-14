@@ -290,13 +290,6 @@ int query_device_thread(void *id_ptr) {
     return query_device_failed(ctx, id, "Connection failed");
   }
 
-  // double temp = 0;
-  // if (-1 == read_input_register_scaled(ctx, 0x331E, &temp)) {
-  //   fprintf(LOG_ERROR, "Reading temp failed\n");
-  // } else {
-  //   fprintf(LOG_ERROR, "[%" PRIu8 "] temp = %lf\n", id, temp);
-  // }
-
   const time_t now = time(NULL);
 
   fprintf(LOG_DEBUG, "last_time_synced_at[%" PRIu8 "] = %lf\n", id,
@@ -551,7 +544,7 @@ int query(char *dest, const uint8_t *ids) {
       fprintf(LOG_ERROR, "Thread %d failed (code = %d)\n", i, result);
       // return EXIT_FAILURE;
     } else {
-      fprintf(LOG_ERROR, "Thread %d succeeded (code = %d)\n", i, result);
+      fprintf(LOG_DEBUG, "Thread %d succeeded (code = %d)\n", i, result);
       const uint8_t id = ids[i];
       const char *metrics = device_metrics[id];
       fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%zu bytes)\n",

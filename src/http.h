@@ -16,7 +16,7 @@ void set_response(const uint8_t *ids, char *response) {
   int code = 0;
 
   if ((code = query(metrics, ids))) {
-    fprintf(LOG_INFO, "Modbus query failed (code %d)\n", code);
+    fprintf(LOG_ERROR, "Modbus query failed (code %d)\n", code);
     strlcpy(response, "HTTP/1.1 503 Service Unavailable\r\n",
             PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
@@ -86,7 +86,7 @@ int http(const uint16_t port, const uint8_t *ids) {
 
     const double elapsed = after.tv_sec - before.tv_sec +
                            (double)(after.tv_nsec - before.tv_nsec) / 1e9;
-    fprintf(LOG_DEBUG, "HTTP server sent response (%zu bytes) in %.1fs\n\n",
+    fprintf(LOG_INFO, "HTTP server sent response (%zu bytes) in %.1fs\n\n",
             strlen(response), elapsed);
   }
 
