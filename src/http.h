@@ -5,7 +5,7 @@
 #include <time.h>
 #include <unistd.h> // close()
 
-#include "epever.h"
+#include "growatt.h"
 #include "modbus.h"
 
 #define BACKLOG 10 // passed to listen()
@@ -19,13 +19,13 @@ void set_response(const uint8_t *ids, char *response) {
     fprintf(LOG_ERROR, "Modbus query failed (code %d)\n", code);
     strlcpy(response, "HTTP/1.1 503 Service Unavailable\r\n",
             PROMETHEUS_RESPONSE_SIZE);
-    strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, "Server: growatt-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
   } else {
     char content_length[PROMETHEUS_RESPONSE_SIZE];
     sprintf(content_length, "Content-Length: %zu\r\n", strlen(metrics));
 
     strlcpy(response, "HTTP/1.1 200 OK\r\n", PROMETHEUS_RESPONSE_SIZE);
-    strlcat(response, "Server: epever-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
+    strlcat(response, "Server: growatt-modbus\r\n", PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, content_length, PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, "Content-Type: ", PROMETHEUS_RESPONSE_SIZE);
     strlcat(response, PROMETHEUS_CONTENT_TYPE, PROMETHEUS_RESPONSE_SIZE);

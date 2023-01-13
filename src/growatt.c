@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "epever.h"
+#include "growatt.h"
 #include "http.h"
 
 #define MAX_PORT_NUMBER USHRT_MAX
@@ -14,8 +14,8 @@
 int main(int argc, char *argv[]) {
   if (argc != 3) {
     fprintf(LOG_ERROR, "Usage: %s <device_id[,device2_id]> <port>\n", argv[0]);
-    fprintf(LOG_ERROR, "Example: %s 20 1234\n", argv[0]);
-    fprintf(LOG_ERROR, "Example: %s 20,30 1234\n", argv[0]);
+    fprintf(LOG_ERROR, "Example: %s 1 1234\n", argv[0]);
+    fprintf(LOG_ERROR, "Example: %s 1,2 1234\n", argv[0]);
     return EXIT_FAILURE;
   }
 

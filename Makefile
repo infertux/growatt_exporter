@@ -3,12 +3,12 @@ RM=rm -f
 CFLAGS=$(shell pkg-config --cflags libbsd libmodbus)
 LIBS=$(shell pkg-config --libs libbsd libmodbus) -pthread
 
-SRCS=src/epever.c src/*.h
+SRCS=src/growatt.c src/*.h
 
-all: epever lint
+all: growatt lint
 
-epever: $(SRCS)
-	$(CC) $(CFLAGS) $(LIBS) -Wall -Werror -pedantic -O3 -o epever src/epever.c
+growatt: $(SRCS)
+	$(CC) $(CFLAGS) $(LIBS) -Wall -Werror -pedantic -O3 -o growatt src/growatt.c
 
 lint:
 	clang-format --verbose --Werror -i --style=llvm src/*
@@ -16,4 +16,4 @@ lint:
 .PHONY: lint
 
 clean:
-	$(RM) epever
+	$(RM) growatt

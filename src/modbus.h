@@ -9,7 +9,7 @@
 #include <threads.h>
 #include <time.h>
 
-#include "epever.h"
+#include "growatt.h"
 
 #define TIMEZONE_BIAS (7 * HOURS)
 #define MAX_DEVICE_ID 100
@@ -22,7 +22,7 @@
 #define PROMETHEUS_RESPONSE_SIZE 8192U
 #define PROMETHEUS_METRIC_SIZE 256U
 
-#define MODBUS_BAUD 115200
+#define MODBUS_BAUD 9600
 #define MODBUS_PARITY 'N'
 #define MODBUS_DATA_BIT 8
 #define MODBUS_STOP_BIT 1
@@ -33,38 +33,15 @@
 #define REGISTER_HALF_SIZE (REGISTER_SIZE / 2)
 #define REGISTER_HALF_MASK 0xFFU
 
-/* 0x30XX - rated specs */
-#define REGISTER_RATED_INPUT_CURRENT 0x3001
-
-/* 0x31XX - real time data */
-#define REGISTER_PV_VOLTAGE 0x3100
-#define REGISTER_PV_CURRENT 0x3101
-#define REGISTER_PV_POWER 0x3102
-#define REGISTER_BATTERY_VOLTAGE 0x3104
-#define REGISTER_BATTERY_CURRENT 0x3105
-#define REGISTER_BATTERY_POWER 0x3106
-#define REGISTER_BATTERY_TEMPERATURE 0x3110
-#define REGISTER_DEVICE_TEMPERATURE 0x3111
-#define REGISTER_BATTERY_SOC 0x311A
-
-/* 0x32XX - status */
-#define REGISTER_BATTERY_STATUS 0x3200
-#define REGISTER_CHARGING_STATUS 0x3201
-
-/* 0x33XX - stats */
-#define REGISTER_BATTERY_VOLTAGE_MAXIMUM_TODAY 0x3302
-#define REGISTER_BATTERY_VOLTAGE_MINIMUM_TODAY 0x3303
-#define REGISTER_ENERGY_GENERATED_TODAY 0x330C
-#define REGISTER_ENERGY_GENERATED_TOTAL 0x3312
-
-/* 0x90xx - settings */
-#define REGISTER_SETTINGS_CHARGING_LIMIT_VOLTAGE 0x9004
-#define REGISTER_SETTINGS_BOOST_VOLTAGE 0x9007
-#define REGISTER_SETTINGS_FLOAT_VOLTAGE 0x9008
-#define REGISTER_SETTINGS_BOOST_RECONNECT_VOLTAGE 0x9009
-#define REGISTER_SETTINGS_BOOST_DURATION 0x906C
-#define REGISTER_SETTINGS_LENGTH_OF_NIGHT 0x9065
-#define REGISTER_CLOCK 0x9013
+#define REGISTER_SYSTEM_STATUS 0
+#define REGISTER_PV_VOLTAGE 1
+#define REGISTER_PV_POWER 3
+#define REGISTER_BATTERY_VOLTAGE 17
+#define REGISTER_BATTERY_SOC 18
+#define REGISTER_TEMPERATURE_INVERTER 25
+#define REGISTER_TEMPERATURE_DCDC 26
+#define REGISTER_FAN_SPEED_MPPT 81
+#define REGISTER_FAN_SPEED_INVERTER 82
 
 #define CLOCK_OFFSET_THRESHOLD 30 // seconds
 
@@ -72,7 +49,7 @@
   do {                                                                         \
     char buffer[PROMETHEUS_METRIC_SIZE];                                       \
     snprintf(buffer, sizeof(buffer),                                           \
-             "# TYPE epever_%s gauge\nepever_%s{%s} %lf\n", name, name,        \
+             "# TYPE growatt_%s gauge\ngrowatt_%s{%s} %lf\n", name, name,      \
              device_id_label, value);                                          \
                                                                                \
     const uint16_t len = strlcat(dest, buffer, PROMETHEUS_RESPONSE_SIZE);      \
@@ -132,27 +109,28 @@ int read_holding_register_scaled_by(modbus_t *ctx, const int addr,
 }
 
 int read_input_register_scaled(modbus_t *ctx, const int addr, double *value) {
-  return read_input_register_scaled_by(ctx, addr, value, 1.0 / 100.0);
+  return read_input_register_scaled_by(ctx, addr, value, 1.0 / 10.0);
 }
 
 int read_holding_register_scaled(modbus_t *ctx, const int addr, double *value) {
-  return read_holding_register_scaled_by(ctx, addr, value, 1.0 / 100.0);
+  return read_holding_register_scaled_by(ctx, addr, value, 1.0 / 10.0);
 }
 
 int read_input_register_double_scaled_by(modbus_t *ctx, const int addr,
                                          double *value, double scale) {
   uint16_t buffer[2] = {0, 0};
   int ret = read_input_registers(ctx, addr, 2, buffer);
-  *value = ((double)(buffer[1] << REGISTER_SIZE) + (double)(buffer[0])) * scale;
+  *value = ((double)(buffer[0] << REGISTER_SIZE) + (double)(buffer[1])) * scale;
 
   return ret;
 }
 
 int read_input_register_double_scaled(modbus_t *ctx, const int addr,
                                       double *value) {
-  return read_input_register_double_scaled_by(ctx, addr, value, 1.0 / 100.0);
+  return read_input_register_double_scaled_by(ctx, addr, value, 1.0 / 10.0);
 }
 
+/*
 void clock_write(modbus_t *ctx) {
   const time_t now = time(NULL) + TIMEZONE_BIAS +
                      2; // adding 2 seconds because writing registers is slow so
@@ -220,6 +198,7 @@ int clock_sync(modbus_t *ctx) {
 
   return EXIT_SUCCESS;
 }
+*/
 
 int query_device_failed(modbus_t *ctx, const uint8_t id, const char *message) {
   if (errno) {
@@ -263,14 +242,8 @@ int query_device_thread(void *id_ptr) {
            id);
 
   modbus_t *ctx = NULL;
-  // XXX: ideally we could use TCP but this always times out for some reason:
-  // ctx = modbus_new_tcp("192.168.1.X", 8088);
-  // ... so we use socat:
-  // socat -ls -v pty,link=/tmp/ttyepever123 tcp:192.168.1.X:8088
-  char path[32];
-  snprintf(path, sizeof(path), "/tmp/ttyepever%" PRIu8, id);
-  ctx = modbus_new_rtu(path, MODBUS_BAUD, MODBUS_PARITY, MODBUS_DATA_BIT,
-                       MODBUS_STOP_BIT);
+  ctx = modbus_new_rtu("/dev/ttyUSB0", MODBUS_BAUD, MODBUS_PARITY,
+                       MODBUS_DATA_BIT, MODBUS_STOP_BIT);
   if (ctx == NULL) {
     return query_device_failed(ctx, id,
                                "Unable to create the libmodbus context");
@@ -290,6 +263,7 @@ int query_device_thread(void *id_ptr) {
     return query_device_failed(ctx, id, "Connection failed");
   }
 
+  /*
   const time_t now = time(NULL);
 
   fprintf(LOG_DEBUG, "last_time_synced_at[%" PRIu8 "] = %lf\n", id,
@@ -301,21 +275,13 @@ int query_device_thread(void *id_ptr) {
 
     last_time_synced_at[id] = now;
   }
+  */
 
-  double battery_status = 0;
-  if (-1 ==
-      read_input_register(ctx, REGISTER_BATTERY_STATUS, &battery_status)) {
-    read_register_failed(id, "battery status");
+  double system_status = 0;
+  if (-1 == read_input_register(ctx, REGISTER_SYSTEM_STATUS, &system_status)) {
+    read_register_failed(id, "system status");
   } else {
-    add_metric("battery_status", battery_status);
-  }
-
-  double charging_status = 0;
-  if (-1 ==
-      read_input_register(ctx, REGISTER_CHARGING_STATUS, &charging_status)) {
-    read_register_failed(id, "charging status");
-  } else {
-    add_metric("charging_status", charging_status);
+    add_metric("system_status", system_status);
   }
 
   double pv_voltage = 0;
@@ -325,12 +291,14 @@ int query_device_thread(void *id_ptr) {
     add_metric("pv_volts", pv_voltage);
   }
 
+  /*
   double pv_current = 0;
   if (-1 == read_input_register_scaled(ctx, REGISTER_PV_CURRENT, &pv_current)) {
     read_register_failed(id, "PV current");
   } else {
     add_metric("pv_amperes", pv_current);
   }
+  */
 
   double pv_power = 0;
   if (-1 ==
@@ -340,26 +308,7 @@ int query_device_thread(void *id_ptr) {
     add_metric("pv_watts", pv_power);
   }
 
-  double battery_voltage_maximum_today = 0;
-  if (-1 == read_input_register_scaled(ctx,
-                                       REGISTER_BATTERY_VOLTAGE_MAXIMUM_TODAY,
-                                       &battery_voltage_maximum_today)) {
-    read_register_failed(id, "battery voltage maximum today");
-  } else {
-    add_metric("battery_voltage_maximum_today_volts",
-               battery_voltage_maximum_today);
-  }
-
-  double battery_voltage_minimum_today = 0;
-  if (-1 == read_input_register_scaled(ctx,
-                                       REGISTER_BATTERY_VOLTAGE_MINIMUM_TODAY,
-                                       &battery_voltage_minimum_today)) {
-    read_register_failed(id, "battery voltage minimum today");
-  } else {
-    add_metric("battery_voltage_minimum_today_volts",
-               battery_voltage_minimum_today);
-  }
-
+  /*
   double energy_generated_today = 0;
   if (-1 ==
       read_input_register_double_scaled_by(
@@ -381,15 +330,17 @@ int query_device_thread(void *id_ptr) {
   } else {
     add_metric("energy_generated_total_watthours", energy_generated_total);
   }
+  */
 
   double battery_voltage = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_BATTERY_VOLTAGE,
-                                       &battery_voltage)) {
+  if (-1 == read_input_register_scaled_by(ctx, REGISTER_BATTERY_VOLTAGE,
+                                          &battery_voltage, 1.0 / 100.0)) {
     read_register_failed(id, "battery voltage");
   } else {
     add_metric("battery_volts", battery_voltage);
   }
 
+  /*
   double battery_current = 0;
   if (-1 == read_input_register_scaled(ctx, REGISTER_BATTERY_CURRENT,
                                        &battery_current)) {
@@ -405,31 +356,46 @@ int query_device_thread(void *id_ptr) {
   } else {
     add_metric("battery_watts", battery_power);
   }
-
-  double battery_temperature = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_BATTERY_TEMPERATURE,
-                                       &battery_temperature)) {
-    read_register_failed(id, "battery temperature");
-  } else {
-    add_metric("battery_temperature_celsius", battery_temperature);
-  }
-
-  double device_temperature = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_DEVICE_TEMPERATURE,
-                                       &device_temperature)) {
-    read_register_failed(id, "device temperature");
-  } else {
-    add_metric("device_temperature_celsius", device_temperature);
-  }
+  */
 
   double battery_soc = 0;
-  if (-1 ==
-      read_input_register_scaled(ctx, REGISTER_BATTERY_SOC, &battery_soc)) {
+  if (-1 == read_input_register(ctx, REGISTER_BATTERY_SOC, &battery_soc)) {
     read_register_failed(id, "battery SOC");
   } else {
     add_metric("battery_soc", battery_soc);
   }
 
+  double temperature_inverter = 0;
+  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_INVERTER,
+                                       &temperature_inverter)) {
+    read_register_failed(id, "inverter temperature");
+  } else {
+    add_metric("temperature_inverter_celsius", temperature_inverter);
+  }
+
+  double temperature_dcdc = 0;
+  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_DCDC,
+                                       &temperature_dcdc)) {
+    read_register_failed(id, "DC-DC temperature");
+  } else {
+    add_metric("temperature_dcdc_celsius", temperature_dcdc);
+  }
+
+  double fan_speed_mppt = 0;
+  if (-1 == read_input_register(ctx, REGISTER_FAN_SPEED_MPPT, &fan_speed_mppt)) {
+    read_register_failed(id, "fan speed MPPT");
+  } else {
+    add_metric("fan_speed_mppt", fan_speed_mppt);
+  }
+
+  double fan_speed_inverter = 0;
+  if (-1 == read_input_register(ctx, REGISTER_FAN_SPEED_INVERTER, &fan_speed_inverter)) {
+    read_register_failed(id, "fan speed inverter");
+  } else {
+    add_metric("fan_speed_inverter", fan_speed_inverter);
+  }
+
+  /*
   fprintf(LOG_DEBUG, "last_time_read_settings_at[%" PRIu8 "] = %lf\n", id,
           difftime(now, last_time_read_settings_at[id]));
   if (difftime(now, last_time_read_settings_at[id]) > 1 * HOUR) {
@@ -501,6 +467,7 @@ int query_device_thread(void *id_ptr) {
 
     last_time_read_settings_at[id] = now; // FIXME
   }
+  */
 
   add_metric("read_metric_failed_total", (double)read_metric_failed_total[id]);
   add_metric("read_metric_succeeded_total",
@@ -522,13 +489,6 @@ int query(char *dest, const uint8_t *ids) {
 
   thrd_t threads[MAX_DEVICE_ID + 1];
 
-  // char *device_metrics = malloc(count * PROMETHEUS_RESPONSE_SIZE *
-  // sizeof(char)); thrd_t *threads = malloc(count * sizeof(thrd_t)); if
-  // (!device_metrics || !threads) {
-  //    fprintf(LOG_ERROR, "Cannot allocate memory\n");
-  //    return EXIT_FAILURE;
-  //}
-
   for (int i = 0; i < count; i++) {
     int status = thrd_create(&threads[i], (thrd_start_t)query_device_thread,
                              (void *)(&(ids[i])));
@@ -542,7 +502,7 @@ int query(char *dest, const uint8_t *ids) {
     int result = 0;
     if (thrd_join(threads[i], &result) != thrd_success) {
       fprintf(LOG_ERROR, "Thread %d failed (code = %d)\n", i, result);
-      // return EXIT_FAILURE;
+      return EXIT_FAILURE;
     } else {
       fprintf(LOG_DEBUG, "Thread %d succeeded (code = %d)\n", i, result);
       const uint8_t id = ids[i];
