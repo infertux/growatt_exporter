@@ -5,7 +5,7 @@
 #include <time.h>
 #include <unistd.h> // close()
 
-#include "growatt.h"
+#include "log.h"
 #include "modbus.h"
 
 #define BACKLOG 10 // passed to listen()

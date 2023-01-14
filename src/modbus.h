@@ -33,16 +33,6 @@
 #define REGISTER_HALF_SIZE (REGISTER_SIZE / 2)
 #define REGISTER_HALF_MASK 0xFFU
 
-#define REGISTER_SYSTEM_STATUS 0
-#define REGISTER_PV_VOLTAGE 1
-#define REGISTER_PV_POWER 3
-#define REGISTER_BATTERY_VOLTAGE 17
-#define REGISTER_BATTERY_SOC 18
-#define REGISTER_TEMPERATURE_INVERTER 25
-#define REGISTER_TEMPERATURE_DCDC 26
-#define REGISTER_FAN_SPEED_MPPT 81
-#define REGISTER_FAN_SPEED_INVERTER 82
-
 #define CLOCK_OFFSET_THRESHOLD 30 // seconds
 
 #define add_metric(name, value)                                                \
@@ -213,11 +203,11 @@ int query_device_failed(modbus_t *ctx, const uint8_t id, const char *message) {
   return (errno ? errno : 9001);
 }
 
-void read_register_failed(const uint8_t id, const char *message) {
+void read_register_failed(const uint8_t id, const char *name) {
   read_metric_failed_total[id]++;
 
   fprintf(LOG_ERROR, "[Device %" PRIu8 "] Reading register %s failed", id,
-          message);
+          name);
 
   if (errno) {
     fprintf(LOG_ERROR, ": %s (%d)", modbus_strerror(errno), errno);
@@ -277,122 +267,27 @@ int query_device_thread(void *id_ptr) {
   }
   */
 
-  double system_status = 0;
-  if (-1 == read_input_register(ctx, REGISTER_SYSTEM_STATUS, &system_status)) {
-    read_register_failed(id, "system status");
-  } else {
-    add_metric("system_status", system_status);
-  }
+  for (uint8_t i = 0; i < sizeof(growatt_registers) / sizeof(struct growatt_register); i++) {
+    const struct growatt_register reg = growatt_registers[i];
+    int ret;
+    double result = 0;
 
-  double pv_voltage = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_PV_VOLTAGE, &pv_voltage)) {
-    read_register_failed(id, "PV voltage");
-  } else {
-    add_metric("pv_volts", pv_voltage);
-  }
+    switch (reg.register_size) {
+        case REGISTER_SINGLE:
+        ret = read_input_register_scaled_by(ctx, reg.address, &result, reg.scale);
+        break;
+        case REGISTER_DOUBLE:
+        ret = read_input_register_double_scaled_by(ctx, reg.address, &result, reg.scale);
+        break;
+        default:
+        exit(42);
+    }
 
-  /*
-  double pv_current = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_PV_CURRENT, &pv_current)) {
-    read_register_failed(id, "PV current");
-  } else {
-    add_metric("pv_amperes", pv_current);
-  }
-  */
-
-  double pv_power = 0;
-  if (-1 ==
-      read_input_register_double_scaled(ctx, REGISTER_PV_POWER, &pv_power)) {
-    read_register_failed(id, "PV power");
-  } else {
-    add_metric("pv_watts", pv_power);
-  }
-
-  /*
-  double energy_generated_today = 0;
-  if (-1 ==
-      read_input_register_double_scaled_by(
-          ctx, REGISTER_ENERGY_GENERATED_TODAY, &energy_generated_today,
-          // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-          1000.0 / 100.0)) {
-    read_register_failed(id, "energy generated today");
-  } else {
-    add_metric("energy_generated_today_watthours", energy_generated_today);
-  }
-
-  double energy_generated_total = 0;
-  if (-1 ==
-      read_input_register_double_scaled_by(
-          ctx, REGISTER_ENERGY_GENERATED_TOTAL, &energy_generated_total,
-          // NOLINTNEXTLINE(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-          1000.0 / 100.0)) {
-    read_register_failed(id, "energy generated total");
-  } else {
-    add_metric("energy_generated_total_watthours", energy_generated_total);
-  }
-  */
-
-  double battery_voltage = 0;
-  if (-1 == read_input_register_scaled_by(ctx, REGISTER_BATTERY_VOLTAGE,
-                                          &battery_voltage, 1.0 / 100.0)) {
-    read_register_failed(id, "battery voltage");
-  } else {
-    add_metric("battery_volts", battery_voltage);
-  }
-
-  /*
-  double battery_current = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_BATTERY_CURRENT,
-                                       &battery_current)) {
-    read_register_failed(id, "battery current");
-  } else {
-    add_metric("battery_amperes", battery_current);
-  }
-
-  double battery_power = 0;
-  if (-1 == read_input_register_double_scaled(ctx, REGISTER_BATTERY_POWER,
-                                              &battery_power)) {
-    read_register_failed(id, "battery power");
-  } else {
-    add_metric("battery_watts", battery_power);
-  }
-  */
-
-  double battery_soc = 0;
-  if (-1 == read_input_register(ctx, REGISTER_BATTERY_SOC, &battery_soc)) {
-    read_register_failed(id, "battery SOC");
-  } else {
-    add_metric("battery_soc", battery_soc);
-  }
-
-  double temperature_inverter = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_INVERTER,
-                                       &temperature_inverter)) {
-    read_register_failed(id, "inverter temperature");
-  } else {
-    add_metric("temperature_inverter_celsius", temperature_inverter);
-  }
-
-  double temperature_dcdc = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_DCDC,
-                                       &temperature_dcdc)) {
-    read_register_failed(id, "DC-DC temperature");
-  } else {
-    add_metric("temperature_dcdc_celsius", temperature_dcdc);
-  }
-
-  double fan_speed_mppt = 0;
-  if (-1 == read_input_register(ctx, REGISTER_FAN_SPEED_MPPT, &fan_speed_mppt)) {
-    read_register_failed(id, "fan speed MPPT");
-  } else {
-    add_metric("fan_speed_mppt", fan_speed_mppt);
-  }
-
-  double fan_speed_inverter = 0;
-  if (-1 == read_input_register(ctx, REGISTER_FAN_SPEED_INVERTER, &fan_speed_inverter)) {
-    read_register_failed(id, "fan speed inverter");
-  } else {
-    add_metric("fan_speed_inverter", fan_speed_inverter);
+    if (-1 == ret) {
+      read_register_failed(id, reg.human_name);
+    } else {
+      add_metric(reg.metric_name, result);
+    }
   }
 
   /*

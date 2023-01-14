@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "growatt.h"
+#include "log.h"
 #include "http.h"
 
 #define MAX_PORT_NUMBER USHRT_MAX
