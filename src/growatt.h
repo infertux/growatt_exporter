@@ -1,105 +1,74 @@
 #include <inttypes.h>
 
-struct growatt_register {
-    uint8_t address;
-    char human_name[32];
-    char metric_name[32];
-    enum RegisterSize { REGISTER_SINGLE, REGISTER_DOUBLE } register_size;
-    double scale;
+enum {
+  MAX_METRIC_LENGTH = 64,
 };
 
-//# REGISTER_BATTERY_VOLTAGE 17
-//# REGISTER_BATTERY_SOC 18
-//# REGISTER_TEMPERATURE_INVERTER 25
-//# REGISTER_TEMPERATURE_DCDC 26
-//# REGISTER_TEMPERATURE_BUCK1 32
-//# REGISTER_TEMPERATURE_BUCK2 33
-//# REGISTER_ENERGY_PV_TODAY 48
-//# REGISTER_ENERGY_PV_TOTAL 50
-//# REGISTER_FAN_SPEED_MPPT 81
-//# REGISTER_FAN_SPEED_INVERTER 82
-
-struct growatt_register growatt_registers[3] = {
-    { 0, "system status", "system_status", REGISTER_SINGLE, 1 },
-    { 1, "PV voltage", "pv_volts", REGISTER_SINGLE, 0.1 },
-    { 3, "PV power", "pv_watts", REGISTER_DOUBLE, 0.1 }
+struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) growatt_register {
+  uint8_t address;
+  char human_name[MAX_METRIC_LENGTH];
+  char metric_name[MAX_METRIC_LENGTH];
+  enum { REGISTER_SINGLE, REGISTER_DOUBLE } register_size;
+  double scale;
 };
 
-/*
-  double battery_voltage = 0;
-  if (-1 == read_input_register_scaled_by(ctx, REGISTER_BATTERY_VOLTAGE,
-                                          &battery_voltage, 1.0 / 100.0)) {
-    read_register_failed(id, "battery voltage");
-  } else {
-    add_metric("battery_volts", battery_voltage);
-  }
+const struct growatt_register growatt_holding_registers[] = {
+    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    {34, "max charging current", "settings_max_charging_amps", REGISTER_SINGLE, 1},
+    {35, "bulk charging voltage", "settings_bulk_charging_volts", REGISTER_SINGLE, 0.1},
+    {36, "float charging voltage", "settings_float_charging_volts", REGISTER_SINGLE, 0.1},
+    {37, "battery voltage switch to utility", "settings_switch_to_utility_volts", REGISTER_SINGLE,
+     0.1},
+    // XXX: not needed
+    // {76, "rated active power", "rated_active_power_watts", REGISTER_DOUBLE, 0.1},
+    // XXX: not needed
+    // {78, "rated apparant power", "rated_apparant_power_va", REGISTER_DOUBLE, 0.1},
+    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+};
 
-  double battery_soc = 0;
-  if (-1 == read_input_register(ctx, REGISTER_BATTERY_SOC, &battery_soc)) {
-    read_register_failed(id, "battery SOC");
-  } else {
-    add_metric("battery_soc", battery_soc);
-  }
-
-  double temperature_inverter = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_INVERTER,
-                                       &temperature_inverter)) {
-    read_register_failed(id, "inverter temperature");
-  } else {
-    add_metric("temperature_inverter_celsius", temperature_inverter);
-  }
-
-  double temperature_dcdc = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_DCDC,
-                                       &temperature_dcdc)) {
-    read_register_failed(id, "DC-DC temperature");
-  } else {
-    add_metric("temperature_dcdc_celsius", temperature_dcdc);
-  }
-
-  double temperature_buck1 = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_BUCK1,
-                                       &temperature_buck1)) {
-    read_register_failed(id, "Buck1 temperature");
-  } else {
-    add_metric("temperature_buck1_celsius", temperature_buck1);
-  }
-
-  double temperature_buck2 = 0;
-  if (-1 == read_input_register_scaled(ctx, REGISTER_TEMPERATURE_BUCK2,
-                                       &temperature_buck2)) {
-    read_register_failed(id, "Buck2 temperature");
-  } else {
-    add_metric("temperature_buck2_celsius", temperature_buck2);
-  }
-
-  double energy_pv_today = 0;
-  if (-1 == read_input_register_double_scaled(ctx, REGISTER_ENERGY_PV_TODAY,
-                                       &energy_pv_today)) {
-    read_register_failed(id, "PV energy today");
-  } else {
-    add_metric("energy_pv_today_kwh", energy_pv_today);
-  }
-
-  double energy_pv_total = 0;
-  if (-1 == read_input_register_double_scaled(ctx, REGISTER_ENERGY_PV_TOTAL,
-                                       &energy_pv_total)) {
-    read_register_failed(id, "PV energy total");
-  } else {
-    add_metric("energy_pv_total_kwh", energy_pv_total);
-  }
-
-  double fan_speed_mppt = 0;
-  if (-1 == read_input_register(ctx, REGISTER_FAN_SPEED_MPPT, &fan_speed_mppt)) {
-    read_register_failed(id, "fan speed MPPT");
-  } else {
-    add_metric("fan_speed_mppt", fan_speed_mppt);
-  }
-
-  double fan_speed_inverter = 0;
-  if (-1 == read_input_register(ctx, REGISTER_FAN_SPEED_INVERTER, &fan_speed_inverter)) {
-    read_register_failed(id, "fan speed inverter");
-  } else {
-    add_metric("fan_speed_inverter", fan_speed_inverter);
-  }
-*/
+const struct growatt_register growatt_input_registers[] = {
+    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    {0, "system status", "system_status", REGISTER_SINGLE, 1},
+    {1, "PV1 voltage", "pv1_volts", REGISTER_SINGLE, 0.1},
+    {3, "PV1 power", "pv1_watts", REGISTER_DOUBLE, 0.1},
+    {7, "buck1 current", "buck1_amps", REGISTER_SINGLE, 0.1},
+    // {8, "buck2 current", "buck2_amps", REGISTER_SINGLE, 0.1}, // XXX: always zero
+    {9, "inverter active power", "inverter_active_power_watts", REGISTER_DOUBLE, 0.1},
+    {11, "inverter apparant power", "inverter_apparant_power_va", REGISTER_DOUBLE, 0.1},
+    {13, "grid charging power", "grid_charging_watts", REGISTER_DOUBLE, 0.1},
+    {17, "battery voltage", "battery_volts", REGISTER_SINGLE, 0.01},
+    {18, "battery SOC", "battery_soc", REGISTER_SINGLE, 1},
+    // {19, "bus voltage", "bus_volts", REGISTER_SINGLE, 0.1}, // irrelevant
+    {20, "grid voltage", "grid_volts", REGISTER_SINGLE, 0.1},
+    {21, "grid frequency", "grid_hz", REGISTER_SINGLE, 0.01},
+    // {24, "output DC voltage", "output_dc_volts", REGISTER_SINGLE, 0.1}, // XXX: always zero
+    {25, "inverter temperature", "temperature_inverter_celsius", REGISTER_SINGLE, 0.1},
+    {26, "DC-DC temperature", "temperature_dcdc_celsius", REGISTER_SINGLE, 0.1},
+    {27, "inverter load percent", "inverter_load_percent", REGISTER_SINGLE, 0.1},
+    // {30, "work time total", "work_time_total_seconds", REGISTER_DOUBLE, 0.5}, // XXX: always zero
+    {32, "buck1 temperature", "temperature_buck1_celsius", REGISTER_SINGLE, 0.1},
+    // {33, "buck2 temperature", "temperature_buck2_celsius", REGISTER_SINGLE, 0.1}, // irrelevant
+    {34, "output current", "output_amps", REGISTER_SINGLE, 0.1},
+    {35, "inverter current", "inverter_amps", REGISTER_SINGLE, 0.1},
+    {40, "fault bit", "fault_bit", REGISTER_SINGLE, 1},
+    {41, "warning bit", "warning_bit", REGISTER_SINGLE, 1},
+    // {42, "fault value", "fault_value", REGISTER_SINGLE, 1}, // XXX: always zero
+    // {43, "warning value", "warning_value", REGISTER_SINGLE, 1}, // XXX: always zero
+    {48, "PV energy today", "energy_pv_today_kwh", REGISTER_DOUBLE, 0.1},
+    {50, "PV energy total", "energy_pv_total_kwh", REGISTER_DOUBLE, 0.1},
+    {56, "grid energy today", "energy_grid_today_kwh", REGISTER_DOUBLE, 0.1},
+    {58, "grid energy total", "energy_grid_total_kwh", REGISTER_DOUBLE, 0.1},
+    {60, "battery discharging energy today", "battery_discharging_today_kwh", REGISTER_DOUBLE, 0.1},
+    {64, "grid discharging energy today", "grid_discharging_today_kwh", REGISTER_DOUBLE,
+     0.1}, // FIXME: irrelevant?
+    {66, "grid discharging energy total", "grid_discharging_total_kwh", REGISTER_DOUBLE,
+     0.1}, // FIXME: irrelevant?
+    {68, "grid charging current", "grid_charging_amps", REGISTER_SINGLE, 0.1},
+    {69, "inverter discharging power", "inverter_discharging_watts", REGISTER_DOUBLE, 0.1},
+    {73, "battery discharging power", "battery_discharging_watts", REGISTER_DOUBLE, 0.1},
+    {77, "battery power (signed)", "battery_watts", REGISTER_DOUBLE, 0.1},
+    // {81, "fan speed MPPT", "fan_speed_mppt", REGISTER_SINGLE, 1}, // XXX: always zero
+    {82, "fan speed inverter", "fan_speed_inverter", REGISTER_SINGLE, 1},
+    // {180, "solar charger status", "solar_status", REGISTER_SINGLE, 1}, // XXX: always zero
+    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+};

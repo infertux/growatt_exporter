@@ -4,12 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "log.h"
 #include "http.h"
+#include "log.h"
 
 #define MAX_PORT_NUMBER USHRT_MAX
-#define MAX_DEVICES 8
-#define RADIX_DECIMAL 10
+
+enum {
+  MAX_DEVICES = 8,
+  RADIX_DECIMAL = 10,
+};
 
 int main(int argc, char *argv[]) {
   if (argc != 3) {
