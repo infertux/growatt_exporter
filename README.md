@@ -1,6 +1,6 @@
-# epever_exporter
+# growatt_exporter
 
-epever_exporter is a standalone program written in C that can query Epever/Epsolar Tracer solar charge controllers and output metrics compatible with Prometheus.
+growatt_exporter is a standalone program written in C that can query Growatt solar inverters (tested on SPF5000ES so far) and output metrics compatible with Prometheus.
 
 This allows to monitor PV production, battery status, etc. on a nice Grafana interface.
 
@@ -8,11 +8,13 @@ This allows to monitor PV production, battery status, etc. on a nice Grafana int
 
 ```bash
 apt install clang libbsd-dev libmodbus-dev
-make epever
+make growatt
 ```
 
 ## Kudos
 
-The "ModBus Register Address List" PDF document has been a very valuable resource. A copy of it is included in this Git repository. The original file can be downloaded at [solar-elektro.cz](http://www.solar-elektro.cz/data/dokumenty/1733_modbus_protocol.pdf). Thank you to the original author for their work.
+The "Growatt OffGrid SPF5000 Modbus RS485 RTU Protocol" PDF document has been a very valuable resource. A copy of it is included in this Git repository. Thank you to the original author for their work.
 
-## License: AGPLv3+
+## License
+
+AGPLv3+
