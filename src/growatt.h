@@ -4,15 +4,15 @@ enum {
   MAX_METRIC_LENGTH = 64,
 };
 
-struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) growatt_register {
+typedef struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) {
   uint8_t address;
   char human_name[MAX_METRIC_LENGTH];
   char metric_name[MAX_METRIC_LENGTH];
   enum { REGISTER_SINGLE, REGISTER_DOUBLE } register_size;
   double scale;
-};
+} REGISTER;
 
-const struct growatt_register growatt_holding_registers[] = {
+const REGISTER holding_registers[] = {
     // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     {34, "max charging current", "settings_max_charging_amps", REGISTER_SINGLE, 1},
     {35, "bulk charging voltage", "settings_bulk_charging_volts", REGISTER_SINGLE, 0.1},
@@ -26,7 +26,7 @@ const struct growatt_register growatt_holding_registers[] = {
     // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 };
 
-const struct growatt_register growatt_input_registers[] = {
+const REGISTER input_registers[] = {
     // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
     {0, "system status", "system_status", REGISTER_SINGLE, 1},
     {1, "PV1 voltage", "pv1_volts", REGISTER_SINGLE, 0.1},
@@ -66,7 +66,7 @@ const struct growatt_register growatt_input_registers[] = {
     {68, "grid charging current", "grid_charging_amps", REGISTER_SINGLE, 0.1},
     {69, "inverter discharging power", "inverter_discharging_watts", REGISTER_DOUBLE, 0.1},
     {73, "battery discharging power", "battery_discharging_watts", REGISTER_DOUBLE, 0.1},
-    {77, "battery power (signed)", "battery_watts", REGISTER_DOUBLE, 0.1},
+    {77, "battery net power (signed)", "battery_net_watts", REGISTER_DOUBLE, 0.1},
     // {81, "fan speed MPPT", "fan_speed_mppt", REGISTER_SINGLE, 1}, // XXX: always zero
     {82, "fan speed inverter", "fan_speed_inverter", REGISTER_SINGLE, 1},
     // {180, "solar charger status", "solar_status", REGISTER_SINGLE, 1}, // XXX: always zero

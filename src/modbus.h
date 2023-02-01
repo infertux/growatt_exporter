@@ -15,10 +15,10 @@
 enum {
   MAX_DEVICE_ID = 100,
   HOUR = 3600,
+  DAY = 24 * HOUR,
 };
 
-#define TIMEZONE_BIAS (7 * HOURS)
-#define HOURS HOUR
+#define TIMEZONE_BIAS (7L * HOUR)
 
 #define DEBUG FALSE
 
@@ -115,21 +115,22 @@ int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *
 
 /*
 void clock_write(modbus_t *ctx) {
-  const time_t now = time(NULL) + TIMEZONE_BIAS +
-                     2; // adding 2 seconds because writing registers is slow so
-                        // we need to compensate for it
-  const struct tm *tm = gmtime(&now);
+  const time_t now = time(NULL) + TIMEZONE_BIAS + 2; // adding 2 seconds because writing registers
+                                                     // is slow so we need to compensate for it
+  const struct tm *now_tm = gmtime(&now);
   const uint16_t year_offset = 100;
 
   const uint16_t clock[3] = {
-      ((uint16_t)tm->tm_min << REGISTER_HALF_SIZE) + (uint8_t)tm->tm_sec,
-      ((uint16_t)tm->tm_mday << REGISTER_HALF_SIZE) + (uint8_t)tm->tm_hour,
-      (((uint16_t)tm->tm_year - year_offset) << REGISTER_HALF_SIZE) +
-          (uint8_t)tm->tm_mon + 1,
+      // NOLINTBEGIN(hicpp-signed-bitwise)
+      ((uint16_t)now_tm->tm_min << REGISTER_HALF_SIZE) + (uint8_t)now_tm->tm_sec,
+      ((uint16_t)now_tm->tm_mday << REGISTER_HALF_SIZE) + (uint8_t)now_tm->tm_hour,
+      (((uint16_t)now_tm->tm_year - year_offset) << REGISTER_HALF_SIZE) + (uint8_t)now_tm->tm_mon +
+          1,
+      // NOLINTEND(hicpp-signed-bitwise)
   };
 
-  fprintf(LOG_DEBUG, "About to write %04X·%04X·%04X into clock register\n",
-          clock[2], clock[1], clock[0]);
+  fprintf(LOG_DEBUG, "About to write %04X·%04X·%04X into clock register\n", clock[2], clock[1],
+          clock[0]);
 
   if (3 != modbus_write_holding_registers(ctx, REGISTER_CLOCK, 3, clock)) {
     fprintf(LOG_ERROR, "Writing clock failed\n");
@@ -145,17 +146,18 @@ int clock_sync(modbus_t *ctx) {
     return INT_MAX;
   }
 
-  fprintf(LOG_DEBUG, "Clock register is %04X·%04X·%04X\n", clock[2], clock[1],
-          clock[0]);
+  fprintf(LOG_DEBUG, "Clock register is %04X·%04X·%04X\n", clock[2], clock[1], clock[0]);
 
   const int year_offset = 100;
   struct tm clock_tm = {
+      // NOLINTBEGIN(hicpp-signed-bitwise)
       (int)(clock[0] & REGISTER_HALF_MASK),           // seconds
       (clock[0] >> REGISTER_HALF_SIZE),               // minutes
       (int)(clock[1] & REGISTER_HALF_MASK),           // hours
       (clock[1] >> REGISTER_HALF_SIZE),               // day
       (int)(clock[2] & REGISTER_HALF_MASK) - 1,       // month
-      (clock[2] >> REGISTER_HALF_SIZE) + year_offset, // year;
+      (clock[2] >> REGISTER_HALF_SIZE) + year_offset, // year
+                                                      // NOLINTEND(hicpp-signed-bitwise)
   };
   const time_t clock_time_t = mktime(&clock_tm);
   const time_t now = time(NULL) + TIMEZONE_BIAS;
@@ -175,9 +177,9 @@ int clock_sync(modbus_t *ctx) {
     clock_write(ctx);
 
     return (int)difference;
-  } else {
-    fprintf(LOG_INFO, "Device time is %.0lfs ahead\n", difference);
   }
+
+  fprintf(LOG_INFO, "Device time is %.0lfs ahead\n", difference);
 
   return EXIT_SUCCESS;
 }
@@ -196,7 +198,7 @@ int query_device_failed(modbus_t *ctx, const uint8_t device_id, const char *mess
   return (errno ? errno : 9001); // NOLINT: 9001 is an unassigned modbus errno
 }
 
-void read_register_failed(const uint8_t device_id, const struct growatt_register *reg) {
+void read_register_failed(const uint8_t device_id, const REGISTER *reg) {
   read_metric_failed_total[device_id]++;
 
   fprintf(LOG_ERROR, "[Device %" PRIu8 "] Reading register %" PRIu8 " (%s) failed", device_id,
@@ -249,7 +251,7 @@ int query_device_thread(void *id_ptr) {
   /*
   fprintf(LOG_DEBUG, "last_time_synced_at[%" PRIu8 "] = %lf\n", device_id,
           difftime(now, last_time_synced_at[device_id]));
-  if (difftime(now, last_time_synced_at[device_id]) > 24 * HOURS) {
+  if (difftime(now, last_time_synced_at[device_id]) > 1 * DAY) {
     if (clock_sync(ctx)) {
       fprintf(LOG_ERROR, "Synced time\n");
     }
@@ -261,10 +263,9 @@ int query_device_thread(void *id_ptr) {
   fprintf(LOG_DEBUG, "last_time_read_settings_at[%" PRIu8 "] = %lf\n", device_id,
           difftime(now, last_time_read_settings_at[device_id]));
   if (difftime(now, last_time_read_settings_at[device_id]) > 1 * HOUR) {
-    const uint8_t register_count =
-        sizeof(growatt_holding_registers) / sizeof(struct growatt_register);
+    const uint8_t register_count = sizeof(holding_registers) / sizeof(REGISTER);
     for (uint8_t index = 0; index < register_count; index++) {
-      const struct growatt_register reg = growatt_holding_registers[index];
+      const REGISTER reg = holding_registers[index];
       int ret = -1;
       double result[] = {0, 0};
 
@@ -291,9 +292,9 @@ int query_device_thread(void *id_ptr) {
     last_time_read_settings_at[device_id] = now;
   }
 
-  const uint8_t register_count = sizeof(growatt_input_registers) / sizeof(struct growatt_register);
+  const uint8_t register_count = sizeof(input_registers) / sizeof(REGISTER);
   for (uint8_t index = 0; index < register_count; index++) {
-    const struct growatt_register reg = growatt_input_registers[index];
+    const REGISTER reg = input_registers[index];
     int ret = -1;
     double result[] = {0, 0};
 

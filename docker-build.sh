@@ -26,6 +26,6 @@ if [ -z "${FAST:-}" ]; then
     docker exec $container apt-get autoremove -y --purge
 fi
 
-docker exec --workdir "${volume}" $container rm -fv growatt
-docker exec --workdir "${volume}" $container make growatt
-docker exec --workdir "${volume}" $container ls -l growatt
+docker exec --workdir "${volume}" $container rm -fv $target
+docker exec --workdir "${volume}" $container make $target
+docker exec --workdir "${volume}" $container ls -l $target
