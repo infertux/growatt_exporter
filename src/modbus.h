@@ -151,11 +151,11 @@ int clock_sync(modbus_t *ctx) {
   const int year_offset = 100;
   struct tm clock_tm = {
       // NOLINTBEGIN(hicpp-signed-bitwise)
-      (int)(clock[0] & REGISTER_HALF_MASK),           // seconds
+      (clock[0] & REGISTER_HALF_MASK),                // seconds
       (clock[0] >> REGISTER_HALF_SIZE),               // minutes
-      (int)(clock[1] & REGISTER_HALF_MASK),           // hours
+      (clock[1] & REGISTER_HALF_MASK),                // hours
       (clock[1] >> REGISTER_HALF_SIZE),               // day
-      (int)(clock[2] & REGISTER_HALF_MASK) - 1,       // month
+      (clock[2] & REGISTER_HALF_MASK) - 1,            // month
       (clock[2] >> REGISTER_HALF_SIZE) + year_offset, // year
                                                       // NOLINTEND(hicpp-signed-bitwise)
   };

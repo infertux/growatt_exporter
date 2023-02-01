@@ -66,7 +66,7 @@ const REGISTER input_registers[] = {
     {68, "grid charging current", "grid_charging_amps", REGISTER_SINGLE, 0.1},
     {69, "inverter discharging power", "inverter_discharging_watts", REGISTER_DOUBLE, 0.1},
     {73, "battery discharging power", "battery_discharging_watts", REGISTER_DOUBLE, 0.1},
-    {77, "battery net power (signed)", "battery_net_watts", REGISTER_DOUBLE, 0.1},
+    {77, "battery net power (signed)", "battery_net_watts", REGISTER_DOUBLE, -0.1},
     // {81, "fan speed MPPT", "fan_speed_mppt", REGISTER_SINGLE, 1}, // XXX: always zero
     {82, "fan speed inverter", "fan_speed_inverter", REGISTER_SINGLE, 1},
     // {180, "solar charger status", "solar_status", REGISTER_SINGLE, 1}, // XXX: always zero
