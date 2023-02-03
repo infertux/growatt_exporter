@@ -30,7 +30,7 @@ enum {
   MODBUS_PARITY = 'N',
   MODBUS_DATA_BIT = 8,
   MODBUS_STOP_BIT = 1,
-  MODBUS_RESPONSE_TIMEOUT = 3,
+  MODBUS_RESPONSE_TIMEOUT = 3, // seconds
 };
 
 enum {
@@ -80,7 +80,7 @@ int read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value
 
 int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double *value,
                                            double scale) {
-  uint16_t buffer[2] = {0, 0};
+  uint16_t buffer[2] = {0};
   int ret = modbus_read_holding_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
   *value = ((double)(buffer[0] << REGISTER_SIZE) + (double)(buffer[1])) * scale;
@@ -98,7 +98,7 @@ int read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, 
 
 int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *value,
                                          double scale) {
-  uint16_t buffer[2] = {0, 0};
+  uint16_t buffer[2] = {0};
   int ret = modbus_read_input_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
   *value = ((double)(buffer[0] << REGISTER_SIZE) + (double)(buffer[1])) * scale;
@@ -238,11 +238,13 @@ int query_device_thread(void *id_ptr) {
     return query_device_failed(ctx, device_id, "Set debug flag failed");
   }
 
+  if (modbus_set_response_timeout(ctx, MODBUS_RESPONSE_TIMEOUT, 0)) {
+    return query_device_failed(ctx, device_id, "Set response timeout failed");
+  }
+
   if (modbus_set_slave(ctx, 1)) { // required with RTU mode
     return query_device_failed(ctx, device_id, "Set slave failed");
   }
-
-  modbus_set_response_timeout(ctx, MODBUS_RESPONSE_TIMEOUT, 0); // in seconds
 
   if (modbus_connect(ctx)) {
     return query_device_failed(ctx, device_id, "Connection failed");
@@ -267,7 +269,7 @@ int query_device_thread(void *id_ptr) {
     for (uint8_t index = 0; index < register_count; index++) {
       const REGISTER reg = holding_registers[index];
       int ret = -1;
-      double result[] = {0, 0};
+      double result[2] = {0};
 
       switch (reg.register_size) {
       case REGISTER_SINGLE:
@@ -296,7 +298,7 @@ int query_device_thread(void *id_ptr) {
   for (uint8_t index = 0; index < register_count; index++) {
     const REGISTER reg = input_registers[index];
     int ret = -1;
-    double result[] = {0, 0};
+    double result[2] = {0};
 
     switch (reg.register_size) {
     case REGISTER_SINGLE:
