@@ -13,12 +13,13 @@
 #include "log.h"
 
 enum {
-  MAX_DEVICE_ID = 100,
+  MAX_DEVICE_COUNT = 8,
   HOUR = 3600,
   DAY = 24 * HOUR,
+  CLOCK_OFFSET_THRESHOLD = 30, // seconds
 };
 
-#define TIMEZONE_BIAS (7L * HOUR)
+#define TIMEZONE_OFFSET (7L * HOUR)
 
 #define DEBUG FALSE
 
@@ -40,10 +41,6 @@ enum {
 
 #define REGISTER_HALF_SIZE (REGISTER_SIZE / 2)
 
-enum {
-  CLOCK_OFFSET_THRESHOLD = 30, // seconds
-};
-
 #define add_metric(name, value)                                                                    \
   do {                                                                                             \
     char buffer[PROMETHEUS_METRIC_SIZE];                                                           \
@@ -62,17 +59,17 @@ enum {
   } while (0)
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-char device_metrics[MAX_DEVICE_ID + 1][PROMETHEUS_RESPONSE_SIZE * sizeof(char)] = {{'\0'}};
+char device_metrics[MAX_DEVICE_COUNT][PROMETHEUS_RESPONSE_SIZE * sizeof(char)] = {{'\0'}};
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-uint8_t read_metric_failed_total[MAX_DEVICE_ID + 1] = {0};
+uint8_t read_metric_failed_total[MAX_DEVICE_COUNT] = {0};
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-uint8_t read_metric_succeeded_total[MAX_DEVICE_ID + 1] = {0};
+uint8_t read_metric_succeeded_total[MAX_DEVICE_COUNT] = {0};
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-// time_t last_time_synced_at[MAX_DEVICE_ID + 1] = {0};
+time_t last_time_synced_at[MAX_DEVICE_COUNT] = {0};
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-time_t last_time_read_settings_at[MAX_DEVICE_ID + 1] = {0};
+time_t last_time_read_settings_at[MAX_DEVICE_COUNT] = {0};
 
 #define modbus_read_holding_registers modbus_read_registers
 #define modbus_write_holding_registers modbus_write_registers
@@ -115,7 +112,7 @@ int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *
 
 /*
 void clock_write(modbus_t *ctx) {
-  const time_t now = time(NULL) + TIMEZONE_BIAS + 2; // adding 2 seconds because writing registers
+  const time_t now = time(NULL) + TIMEZONE_OFFSET + 2; // adding 2 seconds because writing registers
                                                      // is slow so we need to compensate for it
   const struct tm *now_tm = gmtime(&now);
   const uint16_t year_offset = 100;
@@ -160,7 +157,7 @@ int clock_sync(modbus_t *ctx) {
                                                       // NOLINTEND(hicpp-signed-bitwise)
   };
   const time_t clock_time_t = mktime(&clock_tm);
-  const time_t now = time(NULL) + TIMEZONE_BIAS;
+  const time_t now = time(NULL) + TIMEZONE_OFFSET;
   const double difference = difftime(clock_time_t, now);
 
   if (fabs(difference) >= CLOCK_OFFSET_THRESHOLD) {
@@ -170,7 +167,8 @@ int clock_sync(modbus_t *ctx) {
     strftime(time_string, sizeof time_string, "%FT%T", &clock_tm);
     fprintf(LOG_ERROR, "device time = %s\n", time_string);
 
-    const struct tm *now_tm = gmtime(&now);
+    struct tm *now_tm = NULL;
+    gmtime_r(&now, now_tm);
     strftime(time_string, sizeof time_string, "%FT%T", now_tm);
     fprintf(LOG_ERROR, "        now = %s\n", time_string);
 
@@ -222,7 +220,8 @@ int query_device_thread(void *id_ptr) {
   char *dest = device_metrics[device_id];
   *dest = '\0'; // empty buffer content from previous queries
 
-  char device_id_label[32]; // NOLINT: 32 chars should never overflow since MAX_DEVICE_ID is small
+  char
+      device_id_label[32]; // NOLINT: 32 chars should never overflow since MAX_DEVICE_COUNT is small
   snprintf(device_id_label, sizeof(device_id_label), "device_id=\"%" PRIu8 "\"", device_id);
 
   modbus_t *ctx = NULL;
@@ -335,7 +334,7 @@ int query(char *dest, const uint8_t *device_ids) {
     ;
   fprintf(LOG_DEBUG, "Found %d device IDs to query\n", count);
 
-  thrd_t threads[MAX_DEVICE_ID + 1];
+  thrd_t threads[MAX_DEVICE_COUNT];
 
   for (int i = 0; i < count; i++) {
     int status =

@@ -39,23 +39,20 @@ void set_response(const uint8_t *ids, char *response) {
 }
 
 int http(const uint16_t port, const uint8_t *ids) {
-  int server_socket = socket(AF_INET6,    // IPv6
-                             SOCK_STREAM, // TCP
-                             0            // protocol 0
+  const int server_socket = socket(AF_INET6,    // IPv6
+                                   SOCK_STREAM, // TCP
+                                   0            // protocol 0
   );
 
-  struct sockaddr_in6 address;
-  address.sin6_family = AF_INET6;
-  address.sin6_addr = in6addr_any;
-  address.sin6_port = htons(port);
+  const struct sockaddr_in6 address = {
+      .sin6_family = AF_INET6, .sin6_addr = in6addr_any, .sin6_port = htons(port)};
 
   if (bind(server_socket, (struct sockaddr *)&address, sizeof(address))) {
     fprintf(LOG_ERROR, "bind failed\n");
     return EXIT_FAILURE;
   }
 
-  int listening = listen(server_socket, BACKLOG);
-  if (listening < 0) {
+  if (listen(server_socket, BACKLOG) < 0) {
     fprintf(LOG_ERROR, "The server is not listening\n");
     return EXIT_FAILURE;
   }
@@ -70,7 +67,6 @@ int http(const uint16_t port, const uint8_t *ids) {
     clock_gettime(CLOCK_REALTIME, &before);
     fprintf(LOG_DEBUG, "HTTP server received request...\n");
     set_response(ids, response);
-    // printf("response=\"\n%s\n\"\n", response);
 
     const size_t expected_size = strlen(response);
     const size_t actual_size = write(client_socket, response, expected_size);
