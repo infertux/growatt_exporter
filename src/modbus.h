@@ -16,7 +16,6 @@ enum {
   MAX_DEVICE_COUNT = 8,
   HOUR = 3600,
   DAY = 24 * HOUR,
-  CLOCK_OFFSET_THRESHOLD = 30, // seconds
 };
 
 #define TIMEZONE_OFFSET (7L * HOUR)
@@ -36,10 +35,7 @@ enum {
 
 enum {
   REGISTER_SIZE = 16U,
-  REGISTER_HALF_MASK = 0xFFU,
 };
-
-#define REGISTER_HALF_SIZE (REGISTER_SIZE / 2)
 
 #define add_metric(name, value)                                                                    \
   do {                                                                                             \
@@ -110,32 +106,39 @@ int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *
   return ret;
 }
 
-/*
+inline void print_register(FILE *stream, const uint16_t *reg, const uint8_t size) {
+  for (int i = 0; i < size - 1; i++) {
+    fprintf(stream, "%04X·", reg[i]);
+  }
+  fprintf(stream, "%04X", reg[size - 1]);
+}
+
 void clock_write(modbus_t *ctx) {
   const time_t now = time(NULL) + TIMEZONE_OFFSET + 2; // adding 2 seconds because writing registers
-                                                     // is slow so we need to compensate for it
-  const struct tm *now_tm = gmtime(&now);
-  const uint16_t year_offset = 100;
+                                                       // is slow so we need to compensate for it
+  struct tm now_tm;
+  gmtime_r(&now, &now_tm);
 
-  const uint16_t clock[3] = {
-      // NOLINTBEGIN(hicpp-signed-bitwise)
-      ((uint16_t)now_tm->tm_min << REGISTER_HALF_SIZE) + (uint8_t)now_tm->tm_sec,
-      ((uint16_t)now_tm->tm_mday << REGISTER_HALF_SIZE) + (uint8_t)now_tm->tm_hour,
-      (((uint16_t)now_tm->tm_year - year_offset) << REGISTER_HALF_SIZE) + (uint8_t)now_tm->tm_mon +
-          1,
-      // NOLINTEND(hicpp-signed-bitwise)
+  const uint16_t clock[REGISTER_CLOCK_SIZE] = {
+      now_tm.tm_year - REGISTER_CLOCK_YEAR_OFFSET,
+      now_tm.tm_mon + 1,
+      now_tm.tm_mday,
+      now_tm.tm_hour,
+      now_tm.tm_min,
+      now_tm.tm_sec,
   };
 
-  fprintf(LOG_DEBUG, "About to write %04X·%04X·%04X into clock register\n", clock[2], clock[1],
-          clock[0]);
+  fprintf(LOG_DEBUG, "About to write ");
+  print_register(LOG_DEBUG, clock, REGISTER_CLOCK_SIZE);
+  fprintf(LOG_DEBUG, " into clock register\n");
 
-  if (3 != modbus_write_holding_registers(ctx, REGISTER_CLOCK, 3, clock)) {
+  if (REGISTER_CLOCK_SIZE !=
+      modbus_write_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
     fprintf(LOG_ERROR, "Writing clock failed\n");
   } else {
     fprintf(LOG_INFO, "Writing clock succeeded\n");
   }
 }
-*/
 
 int clock_sync(modbus_t *ctx) {
   uint16_t clock[REGISTER_CLOCK_SIZE] = {0};
@@ -146,19 +149,16 @@ int clock_sync(modbus_t *ctx) {
   }
 
   fprintf(LOG_DEBUG, "Clock register is ");
-  for (int i = 0; i < REGISTER_CLOCK_SIZE; i++) {
-    fprintf(LOG_DEBUG, "%04X·", clock[i]);
-  }
+  print_register(LOG_DEBUG, clock, REGISTER_CLOCK_SIZE);
   fprintf(LOG_DEBUG, "\n");
 
-  const int year_offset = 1900;
   struct tm clock_tm = {
-      clock[REGISTER_CLOCK_SIZE - 1], // seconds
-      clock[4],                       // minutes
-      clock[3],                       // hours
-      clock[2],                       // day
-      clock[1] - 1,                   // month
-      clock[0] - year_offset,         // year
+      clock[REGISTER_CLOCK_SIZE - 1],        // seconds
+      clock[4],                              // minutes
+      clock[3],                              // hours
+      clock[2],                              // day
+      clock[1] - 1,                          // month
+      clock[0] + REGISTER_CLOCK_YEAR_OFFSET, // year
   };
   const time_t clock_time_t = mktime(&clock_tm);
   const time_t now = time(NULL) + TIMEZONE_OFFSET;
@@ -176,7 +176,7 @@ int clock_sync(modbus_t *ctx) {
     strftime(time_string, sizeof time_string, "%FT%T", &now_tm);
     fprintf(LOG_ERROR, "        now = %s\n", time_string);
 
-    // clock_write(ctx);
+    clock_write(ctx);
 
     return (int)difference;
   }

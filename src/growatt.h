@@ -2,8 +2,10 @@
 
 enum {
   MAX_METRIC_LENGTH = 64,
+  CLOCK_OFFSET_THRESHOLD = 30, // seconds
   REGISTER_CLOCK_ADDRESS = 45,
   REGISTER_CLOCK_SIZE = 6,
+  REGISTER_CLOCK_YEAR_OFFSET = -1900, // years
 };
 
 typedef struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) {
