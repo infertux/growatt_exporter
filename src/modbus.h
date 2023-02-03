@@ -135,26 +135,30 @@ void clock_write(modbus_t *ctx) {
     fprintf(LOG_INFO, "Writing clock succeeded\n");
   }
 }
+*/
 
 int clock_sync(modbus_t *ctx) {
-  uint16_t clock[3] = {0, 0, 0};
-  if (-1 == modbus_read_holding_registers(ctx, REGISTER_CLOCK, 3, clock)) {
+  uint16_t clock[REGISTER_CLOCK_SIZE] = {0};
+  if (-1 ==
+      modbus_read_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
     fprintf(LOG_ERROR, "Reading clock failed\n");
     return INT_MAX;
   }
 
-  fprintf(LOG_DEBUG, "Clock register is %04X·%04X·%04X\n", clock[2], clock[1], clock[0]);
+  fprintf(LOG_DEBUG, "Clock register is ");
+  for (int i = 0; i < REGISTER_CLOCK_SIZE; i++) {
+    fprintf(LOG_DEBUG, "%04X·", clock[i]);
+  }
+  fprintf(LOG_DEBUG, "\n");
 
-  const int year_offset = 100;
+  const int year_offset = 1900;
   struct tm clock_tm = {
-      // NOLINTBEGIN(hicpp-signed-bitwise)
-      (clock[0] & REGISTER_HALF_MASK),                // seconds
-      (clock[0] >> REGISTER_HALF_SIZE),               // minutes
-      (clock[1] & REGISTER_HALF_MASK),                // hours
-      (clock[1] >> REGISTER_HALF_SIZE),               // day
-      (clock[2] & REGISTER_HALF_MASK) - 1,            // month
-      (clock[2] >> REGISTER_HALF_SIZE) + year_offset, // year
-                                                      // NOLINTEND(hicpp-signed-bitwise)
+      clock[REGISTER_CLOCK_SIZE - 1], // seconds
+      clock[4],                       // minutes
+      clock[3],                       // hours
+      clock[2],                       // day
+      clock[1] - 1,                   // month
+      clock[0] - year_offset,         // year
   };
   const time_t clock_time_t = mktime(&clock_tm);
   const time_t now = time(NULL) + TIMEZONE_OFFSET;
@@ -167,12 +171,12 @@ int clock_sync(modbus_t *ctx) {
     strftime(time_string, sizeof time_string, "%FT%T", &clock_tm);
     fprintf(LOG_ERROR, "device time = %s\n", time_string);
 
-    struct tm *now_tm = NULL;
-    gmtime_r(&now, now_tm);
-    strftime(time_string, sizeof time_string, "%FT%T", now_tm);
+    struct tm now_tm;
+    gmtime_r(&now, &now_tm);
+    strftime(time_string, sizeof time_string, "%FT%T", &now_tm);
     fprintf(LOG_ERROR, "        now = %s\n", time_string);
 
-    clock_write(ctx);
+    // clock_write(ctx);
 
     return (int)difference;
   }
@@ -181,7 +185,6 @@ int clock_sync(modbus_t *ctx) {
 
   return EXIT_SUCCESS;
 }
-*/
 
 int query_device_failed(modbus_t *ctx, const uint8_t device_id, const char *message) {
   if (errno) {
@@ -247,7 +250,6 @@ int query_device_thread(void *id_ptr) {
 
   const time_t now = time(NULL);
 
-  /*
   fprintf(LOG_DEBUG, "last_time_synced_at[%" PRIu8 "] = %lf\n", device_id,
           difftime(now, last_time_synced_at[device_id]));
   if (difftime(now, last_time_synced_at[device_id]) > 1 * DAY) {
@@ -257,7 +259,6 @@ int query_device_thread(void *id_ptr) {
 
     last_time_synced_at[device_id] = now;
   }
-  */
 
   fprintf(LOG_DEBUG, "last_time_read_settings_at[%" PRIu8 "] = %lf\n", device_id,
           difftime(now, last_time_read_settings_at[device_id]));
