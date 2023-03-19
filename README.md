@@ -15,6 +15,10 @@ make growatt
 
 The "Growatt OffGrid SPF5000 Modbus RS485 RTU Protocol" PDF document has been a very valuable resource. A copy of it is included in this Git repository. Thank you to the original author for their work.
 
+## Other brands
+
+Would like to monitor Epever/Epsolar Tracer solar charge controllers instead? Here is a sister repository for that: https://github.com/infertux/epever_exporter
+
 ## License
 
 AGPLv3+
