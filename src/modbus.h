@@ -37,21 +37,20 @@ enum {
   REGISTER_SIZE = 16U,
 };
 
-#define add_metric(name, value)                                                                    \
-  do {                                                                                             \
-    char buffer[PROMETHEUS_METRIC_SIZE];                                                           \
-    snprintf(buffer, sizeof(buffer), "# TYPE growatt_%s gauge\ngrowatt_%s{%s} %lf\n", name, name,  \
-             device_id_label, value);                                                              \
-                                                                                                   \
-    const uint16_t len = strlcat(dest, buffer, PROMETHEUS_RESPONSE_SIZE);                          \
-    if (len >= PROMETHEUS_RESPONSE_SIZE) {                                                         \
-      return query_device_failed(ctx, device_id, "buffer overflow");                               \
-    }                                                                                              \
-                                                                                                   \
-    if (strcmp(name, "read_metric_failed_total") != 0 &&                                           \
-        strcmp(name, "read_metric_succeeded_total") != 0) {                                        \
-      read_metric_succeeded_total[device_id]++;                                                    \
-    }                                                                                              \
+#define add_metric(name, value)                                                                                        \
+  do {                                                                                                                 \
+    char buffer[PROMETHEUS_METRIC_SIZE];                                                                               \
+    snprintf(buffer, sizeof(buffer), "# TYPE growatt_%s gauge\ngrowatt_%s{%s} %lf\n", name, name, device_id_label,     \
+             value);                                                                                                   \
+                                                                                                                       \
+    const uint16_t len = strlcat(dest, buffer, PROMETHEUS_RESPONSE_SIZE);                                              \
+    if (len >= PROMETHEUS_RESPONSE_SIZE) {                                                                             \
+      return query_device_failed(ctx, device_id, "buffer overflow");                                                   \
+    }                                                                                                                  \
+                                                                                                                       \
+    if (strcmp(name, "read_metric_failed_total") != 0 && strcmp(name, "read_metric_succeeded_total") != 0) {           \
+      read_metric_succeeded_total[device_id]++;                                                                        \
+    }                                                                                                                  \
   } while (0)
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -78,8 +77,7 @@ int read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value
   return ret;
 }
 
-int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double *value,
-                                           double scale) {
+int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[2] = {0};
   int ret = modbus_read_holding_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
@@ -96,8 +94,7 @@ int read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, 
   return ret;
 }
 
-int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *value,
-                                         double scale) {
+int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[2] = {0};
   int ret = modbus_read_input_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
@@ -132,8 +129,7 @@ void clock_write(modbus_t *ctx) {
   print_register(LOG_DEBUG, clock, REGISTER_CLOCK_SIZE);
   fprintf(LOG_DEBUG, " into clock register\n");
 
-  if (REGISTER_CLOCK_SIZE !=
-      modbus_write_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
+  if (REGISTER_CLOCK_SIZE != modbus_write_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
     fprintf(LOG_ERROR, "Writing clock failed\n");
   } else {
     fprintf(LOG_INFO, "Writing clock succeeded\n");
@@ -142,8 +138,7 @@ void clock_write(modbus_t *ctx) {
 
 int clock_sync(modbus_t *ctx) {
   uint16_t clock[REGISTER_CLOCK_SIZE] = {0};
-  if (-1 ==
-      modbus_read_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
+  if (-1 == modbus_read_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
     fprintf(LOG_ERROR, "Reading clock failed\n");
     return INT_MAX;
   }
@@ -188,8 +183,7 @@ int clock_sync(modbus_t *ctx) {
 
 int query_device_failed(modbus_t *ctx, const uint8_t device_id, const char *message) {
   if (errno) {
-    fprintf(LOG_ERROR, "[Device %" PRIu8 "] %s: %s (%d)\n", device_id, message,
-            modbus_strerror(errno), errno);
+    fprintf(LOG_ERROR, "[Device %" PRIu8 "] %s: %s (%d)\n", device_id, message, modbus_strerror(errno), errno);
   }
 
   if (ctx) {
@@ -202,8 +196,8 @@ int query_device_failed(modbus_t *ctx, const uint8_t device_id, const char *mess
 void read_register_failed(const uint8_t device_id, const REGISTER *reg) {
   read_metric_failed_total[device_id]++;
 
-  fprintf(LOG_ERROR, "[Device %" PRIu8 "] Reading register %" PRIu8 " (%s) failed", device_id,
-          reg->address, reg->human_name);
+  fprintf(LOG_ERROR, "[Device %" PRIu8 "] Reading register %" PRIu8 " (%s) failed", device_id, reg->address,
+          reg->human_name);
 
   if (errno) {
     fprintf(LOG_ERROR, ": %s (%d)", modbus_strerror(errno), errno);
@@ -214,8 +208,7 @@ void read_register_failed(const uint8_t device_id, const REGISTER *reg) {
 
 int query_device_thread(void *id_ptr) {
   const uint8_t device_id = *((uint8_t *)id_ptr);
-  fprintf(LOG_DEBUG, "Querying device ID %" PRIu8 " in thread ID %lu...\n", device_id,
-          thrd_current());
+  fprintf(LOG_DEBUG, "Querying device ID %" PRIu8 " in thread ID %lu...\n", device_id, thrd_current());
 
   read_metric_failed_total[device_id] = 0;
   read_metric_succeeded_total[device_id] = 0;
@@ -223,13 +216,11 @@ int query_device_thread(void *id_ptr) {
   char *dest = device_metrics[device_id];
   *dest = '\0'; // empty buffer content from previous queries
 
-  char
-      device_id_label[32]; // NOLINT: 32 chars should never overflow since MAX_DEVICE_COUNT is small
+  char device_id_label[32]; // NOLINT: 32 chars should never overflow since MAX_DEVICE_COUNT is small
   snprintf(device_id_label, sizeof(device_id_label), "device_id=\"%" PRIu8 "\"", device_id);
 
   modbus_t *ctx = NULL;
-  ctx =
-      modbus_new_rtu("/dev/ttyUSB0", MODBUS_BAUD, MODBUS_PARITY, MODBUS_DATA_BIT, MODBUS_STOP_BIT);
+  ctx = modbus_new_rtu("/dev/ttyUSB0", MODBUS_BAUD, MODBUS_PARITY, MODBUS_DATA_BIT, MODBUS_STOP_BIT);
   if (ctx == NULL) {
     return query_device_failed(ctx, device_id, "Unable to create the libmodbus context");
   }
@@ -340,8 +331,7 @@ int query(char *dest, const uint8_t *device_ids) {
   thrd_t threads[MAX_DEVICE_COUNT];
 
   for (int i = 0; i < count; i++) {
-    int status =
-        thrd_create(&threads[i], (thrd_start_t)query_device_thread, (void *)(&(device_ids[i])));
+    int status = thrd_create(&threads[i], (thrd_start_t)query_device_thread, (void *)(&(device_ids[i])));
     if (status != thrd_success) {
       fprintf(LOG_ERROR, "thrd_create() failed\n");
       return EXIT_FAILURE;
@@ -360,8 +350,7 @@ int query(char *dest, const uint8_t *device_ids) {
     fprintf(LOG_DEBUG, "Thread %d succeeded (code = %d)\n", i, result);
     const uint8_t device_id = device_ids[i];
     const char *metrics = device_metrics[device_id];
-    fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%zu bytes)\n", device_id,
-            strlen(metrics));
+    fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%zu bytes)\n", device_id, strlen(metrics));
 
     const uint16_t len = strlcat(dest, metrics, PROMETHEUS_RESPONSE_SIZE);
     if (len >= PROMETHEUS_RESPONSE_SIZE) {

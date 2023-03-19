@@ -44,8 +44,7 @@ int http(const uint16_t port, const uint8_t *ids) {
                                    0            // protocol 0
   );
 
-  const struct sockaddr_in6 address = {
-      .sin6_family = AF_INET6, .sin6_addr = in6addr_any, .sin6_port = htons(port)};
+  const struct sockaddr_in6 address = {.sin6_family = AF_INET6, .sin6_addr = in6addr_any, .sin6_port = htons(port)};
 
   if (bind(server_socket, (struct sockaddr *)&address, sizeof(address))) {
     fprintf(LOG_ERROR, "bind failed\n");
@@ -82,10 +81,8 @@ int http(const uint16_t port, const uint8_t *ids) {
 
     clock_gettime(CLOCK_REALTIME, &after);
 
-    const double elapsed =
-        after.tv_sec - before.tv_sec + (double)(after.tv_nsec - before.tv_nsec) / 1e9; // NOLINT
-    fprintf(LOG_INFO, "HTTP server sent response (%zu bytes) in %.1fs\n\n", strlen(response),
-            elapsed);
+    const double elapsed = after.tv_sec - before.tv_sec + (double)(after.tv_nsec - before.tv_nsec) / 1e9; // NOLINT
+    fprintf(LOG_INFO, "HTTP server sent response (%zu bytes) in %.1fs\n\n", strlen(response), elapsed);
   }
 
   return EXIT_FAILURE;

@@ -21,12 +21,9 @@ const REGISTER holding_registers[] = {
     {34, "max charging current", "settings_max_charging_amps", REGISTER_SINGLE, 1},
     {35, "bulk charging voltage", "settings_bulk_charging_volts", REGISTER_SINGLE, 0.1},
     {36, "float charging voltage", "settings_float_charging_volts", REGISTER_SINGLE, 0.1},
-    {37, "battery voltage switch to utility", "settings_switch_to_utility_volts", REGISTER_SINGLE,
-     0.1},
-    // XXX: not needed
-    // {76, "rated active power", "rated_active_power_watts", REGISTER_DOUBLE, 0.1},
-    // XXX: not needed
-    // {78, "rated apparant power", "rated_apparant_power_va", REGISTER_DOUBLE, 0.1},
+    {37, "battery voltage switch to utility", "settings_switch_to_utility_volts", REGISTER_SINGLE, 0.1},
+    // {76, "rated active power", "rated_active_power_watts", REGISTER_DOUBLE, 0.1}, // XXX: not needed
+    // {78, "rated apparant power", "rated_apparant_power_va", REGISTER_DOUBLE, 0.1}, // XXX: not needed
     // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 };
 
@@ -58,15 +55,16 @@ const REGISTER input_registers[] = {
     {41, "warning bit", "warning_bit", REGISTER_SINGLE, 1},
     // {42, "fault value", "fault_value", REGISTER_SINGLE, 1}, // XXX: always zero
     // {43, "warning value", "warning_value", REGISTER_SINGLE, 1}, // XXX: always zero
+    // {45, "product check step", "product_check_step", REGISTER_SINGLE, 1}, // irrelevant
+    // {46, "production line mode", "production_line_mode", REGISTER_SINGLE, 1}, // XXX: always zero
+    // {47, "constant power OK flag", "constant_power_ok_flag", REGISTER_SINGLE, 1}, // XXX: always zero
     {48, "PV energy today", "energy_pv_today_kwh", REGISTER_DOUBLE, 0.1},
     {50, "PV energy total", "energy_pv_total_kwh", REGISTER_DOUBLE, 0.1},
     {56, "grid energy today", "energy_grid_today_kwh", REGISTER_DOUBLE, 0.1},
     {58, "grid energy total", "energy_grid_total_kwh", REGISTER_DOUBLE, 0.1},
     {60, "battery discharging energy today", "battery_discharging_today_kwh", REGISTER_DOUBLE, 0.1},
-    {64, "grid discharging energy today", "grid_discharging_today_kwh", REGISTER_DOUBLE,
-     0.1}, // FIXME: irrelevant?
-    {66, "grid discharging energy total", "grid_discharging_total_kwh", REGISTER_DOUBLE,
-     0.1}, // FIXME: irrelevant?
+    {64, "grid discharging energy today", "grid_discharging_today_kwh", REGISTER_DOUBLE, 0.1},
+    {66, "grid discharging energy total", "grid_discharging_total_kwh", REGISTER_DOUBLE, 0.1},
     {68, "grid charging current", "grid_charging_amps", REGISTER_SINGLE, 0.1},
     {69, "inverter discharging power", "inverter_discharging_watts", REGISTER_DOUBLE, 0.1},
     {73, "battery discharging power", "battery_discharging_watts", REGISTER_DOUBLE, 0.1},
