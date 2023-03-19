@@ -30,7 +30,7 @@ enum {
   MODBUS_PARITY = 'N',
   MODBUS_DATA_BIT = 8,
   MODBUS_STOP_BIT = 1,
-  MODBUS_RESPONSE_TIMEOUT = 3, // seconds
+  MODBUS_RESPONSE_TIMEOUT = 1, // second
 };
 
 enum {
