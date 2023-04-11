@@ -5,7 +5,7 @@ LIBS=$(shell pkg-config --libs libbsd libmodbus) -pthread
 
 SRCS=src/growatt.c src/*.h
 
-all: growatt lint
+all: growatt
 
 growatt: $(SRCS)
 	$(CC) $(CFLAGS) $(LIBS) -Wall -Werror -pedantic -O3 -o growatt src/growatt.c

@@ -8,7 +8,7 @@ This allows to monitor PV production, battery status, etc. on a nice Grafana int
 
 ```bash
 apt install clang libbsd-dev libmodbus-dev
-make growatt
+make
 ```
 
 ## Kudos
