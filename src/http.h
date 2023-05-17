@@ -14,7 +14,7 @@ enum {
 
 #define PROMETHEUS_CONTENT_TYPE "text/plain; version=0.0.4; charset=utf-8"
 
-void set_response(const uint8_t *ids, char *response) {
+int set_response(const uint8_t *ids, char *response) {
   char metrics[PROMETHEUS_RESPONSE_SIZE];
   int code = 0;
 
@@ -36,6 +36,8 @@ void set_response(const uint8_t *ids, char *response) {
   strlcat(response, PROMETHEUS_CONTENT_TYPE, PROMETHEUS_RESPONSE_SIZE);
   strlcat(response, "\r\n\r\n", PROMETHEUS_RESPONSE_SIZE);
   strlcat(response, metrics, PROMETHEUS_RESPONSE_SIZE);
+
+  return code;
 }
 
 int http(const uint16_t port, const uint8_t *ids) {
@@ -60,12 +62,16 @@ int http(const uint16_t port, const uint8_t *ids) {
 
   char response[PROMETHEUS_RESPONSE_SIZE];
   struct timespec before, after; // NOLINT(readability-isolate-declaration)
-  while (1) {
+  uint8_t query_failed_count = 0;
+  // exit if we fail 3 times in a row since it's likely a non-transient error
+  // like the block device going away
+  while (query_failed_count < 3) {
     fprintf(LOG_DEBUG, "HTTP server waiting for request...\n");
     const int client_socket = accept(server_socket, NULL, NULL); // NOLINT(android-cloexec-accept)
+
     clock_gettime(CLOCK_REALTIME, &before);
     fprintf(LOG_DEBUG, "HTTP server received request...\n");
-    set_response(ids, response);
+    set_response(ids, response) ? query_failed_count++ : (query_failed_count = 0);
 
     const size_t expected_size = strlen(response);
     const size_t actual_size = write(client_socket, response, expected_size);
