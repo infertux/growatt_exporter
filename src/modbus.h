@@ -1,9 +1,13 @@
+#ifndef GROWATT_MODBUS_H
+#define GROWATT_MODBUS_H
+
+#include <assert.h>
 #include <bsd/string.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h> // INT_MAX
 #include <math.h>
-#include <modbus-rtu.h>
+#include <modbus.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <threads.h>
@@ -13,17 +17,17 @@
 #include "log.h"
 
 enum {
-  MAX_DEVICE_COUNT = 8,
+  REFRESH_PERIOD = 10, // seconds
   HOUR = 3600,
   DAY = 24 * HOUR,
 };
 
-#define TIMEZONE_OFFSET (7L * HOUR)
+#define TIMEZONE_OFFSET (7L * HOUR) // TODO: pass as argument
 
 #define DEBUG FALSE
 
-#define PROMETHEUS_RESPONSE_SIZE 8192U
-#define PROMETHEUS_METRIC_SIZE 256U
+#define METRIC_BUFFER_SIZE 256U
+#define RESPONSE_BUFFER_SIZE 8192U
 
 enum {
   MODBUS_BAUD = 9600,
@@ -37,41 +41,51 @@ enum {
   REGISTER_SIZE = 16U,
 };
 
-#define add_metric(name, value)                                                                                        \
-  do {                                                                                                                 \
-    char buffer[PROMETHEUS_METRIC_SIZE];                                                                               \
-    snprintf(buffer, sizeof(buffer), "# TYPE growatt_%s gauge\ngrowatt_%s{%s} %lf\n", name, name, device_id_label,     \
-             value);                                                                                                   \
-                                                                                                                       \
-    const uint16_t len = strlcat(dest, buffer, PROMETHEUS_RESPONSE_SIZE);                                              \
-    if (len >= PROMETHEUS_RESPONSE_SIZE) {                                                                             \
-      return query_device_failed(ctx, device_id, "buffer overflow");                                                   \
-    }                                                                                                                  \
-                                                                                                                       \
-    if (strcmp(name, "read_metric_failed_total") != 0 && strcmp(name, "read_metric_succeeded_total") != 0) {           \
-      read_metric_succeeded_total[device_id]++;                                                                        \
-    }                                                                                                                  \
-  } while (0)
+typedef struct {
+  char name[METRIC_BUFFER_SIZE];
+  double value;
+} METRIC;
+
+/**
+ * Use (blocking) mutex to access struct
+ */
+typedef struct {
+  mtx_t mutex;
+  METRIC *metrics;
+  /** Number of metrics stored in array (for internal use) */
+  size_t size;
+  /** Number of metrics successfully read */
+  size_t read_metric_succeeded_total;
+  /** Number of metrics failed to read */
+  size_t read_metric_failed_total;
+  /** Timestamp of last clock synchronization check */
+  time_t last_time_synced_at;
+  /** Timestamp of last time settings were queried */
+  time_t last_time_read_settings_at;
+} METRICS;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-char device_metrics[MAX_DEVICE_COUNT][PROMETHEUS_RESPONSE_SIZE * sizeof(char)] = {{'\0'}};
+METRICS device_metrics;
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-uint8_t read_metric_failed_total[MAX_DEVICE_COUNT] = {0};
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-uint8_t read_metric_succeeded_total[MAX_DEVICE_COUNT] = {0};
+void add_metric(char const name[static 1], const double value) {
+  METRIC metric;
+  strlcpy(metric.name, name, METRIC_BUFFER_SIZE);
+  metric.value = value;
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-time_t last_time_synced_at[MAX_DEVICE_COUNT] = {0};
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-time_t last_time_read_settings_at[MAX_DEVICE_COUNT] = {0};
+  device_metrics.metrics = realloc(device_metrics.metrics, (device_metrics.size + 1) * sizeof(metric));
+  device_metrics.metrics[device_metrics.size++] = metric;
+
+  if (strcmp(name, "read_metric_failed_total") != 0 && strcmp(name, "read_metric_succeeded_total") != 0) {
+    device_metrics.read_metric_succeeded_total++;
+  }
+}
 
 #define modbus_read_holding_registers modbus_read_registers
 #define modbus_write_holding_registers modbus_write_registers
 
 int read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[1] = {0};
-  int ret = modbus_read_holding_registers(ctx, addr, 1, buffer);
+  ssize_t ret = modbus_read_holding_registers(ctx, addr, 1, buffer);
   *value = (double)buffer[0] * scale;
 
   return ret;
@@ -79,7 +93,7 @@ int read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value
 
 int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[2] = {0};
-  int ret = modbus_read_holding_registers(ctx, addr, 2, buffer);
+  ssize_t ret = modbus_read_holding_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
   *value = ((double)(buffer[0] << REGISTER_SIZE) + (double)(buffer[1])) * scale;
 
@@ -88,7 +102,7 @@ int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double
 
 int read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[1] = {0};
-  int ret = modbus_read_input_registers(ctx, addr, 1, buffer);
+  ssize_t ret = modbus_read_input_registers(ctx, addr, 1, buffer);
   *value = (double)buffer[0] * scale;
 
   return ret;
@@ -96,18 +110,21 @@ int read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, 
 
 int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[2] = {0};
-  int ret = modbus_read_input_registers(ctx, addr, 2, buffer);
+  ssize_t ret = modbus_read_input_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
   *value = ((double)(buffer[0] << REGISTER_SIZE) + (double)(buffer[1])) * scale;
 
   return ret;
 }
 
-inline void print_register(FILE *stream, const uint16_t *reg, const uint8_t size) {
-  for (int i = 0; i < size - 1; i++) {
-    fprintf(stream, "%04X·", reg[i]);
+inline void print_register(char *dest, const uint16_t *reg, const uint8_t size) {
+  assert(size < 8);
+  char buffer[8];
+  for (int i = 0; i < size; i++) {
+    sprintf(buffer, "%04X·", reg[i]);
+    strlcat(dest, buffer, 64);
   }
-  fprintf(stream, "%04X", reg[size - 1]);
+  dest[strlen(dest) - 1] = 0; // delete last '·'
 }
 
 void clock_write(modbus_t *ctx) {
@@ -125,27 +142,27 @@ void clock_write(modbus_t *ctx) {
       now_tm.tm_sec,
   };
 
-  fprintf(LOG_DEBUG, "About to write ");
-  print_register(LOG_DEBUG, clock, REGISTER_CLOCK_SIZE);
-  fprintf(LOG_DEBUG, " into clock register\n");
+  char hex[64] = {0};
+  print_register(hex, clock, REGISTER_CLOCK_SIZE);
+  LOG(LOG_DEBUG, "About to write %s into clock register", hex);
 
   if (REGISTER_CLOCK_SIZE != modbus_write_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
-    fprintf(LOG_ERROR, "Writing clock failed\n");
+    PERROR("Writing clock failed");
   } else {
-    fprintf(LOG_INFO, "Writing clock succeeded\n");
+    LOG(LOG_INFO, "Writing clock succeeded");
   }
 }
 
 int clock_sync(modbus_t *ctx) {
   uint16_t clock[REGISTER_CLOCK_SIZE] = {0};
   if (-1 == modbus_read_holding_registers(ctx, REGISTER_CLOCK_ADDRESS, REGISTER_CLOCK_SIZE, clock)) {
-    fprintf(LOG_ERROR, "Reading clock failed\n");
+    PERROR("Reading clock failed");
     return INT_MAX;
   }
 
-  fprintf(LOG_DEBUG, "Clock register is ");
-  print_register(LOG_DEBUG, clock, REGISTER_CLOCK_SIZE);
-  fprintf(LOG_DEBUG, "\n");
+  char hex[64] = {0};
+  print_register(hex, clock, REGISTER_CLOCK_SIZE);
+  LOG(LOG_DEBUG, "Clock register is %s", hex);
 
   struct tm clock_tm = {
       clock[REGISTER_CLOCK_SIZE - 1],        // seconds
@@ -160,30 +177,30 @@ int clock_sync(modbus_t *ctx) {
   const double difference = difftime(clock_time_t, now);
 
   if (fabs(difference) >= CLOCK_OFFSET_THRESHOLD) {
-    fprintf(LOG_ERROR, "Device time is %.0lfs ahead!\n", difference);
+    LOG(LOG_ERROR, "Device time is %.0lfs ahead!", difference);
 
     char time_string[sizeof "2011-10-08T07:07:09Z"];
     strftime(time_string, sizeof time_string, "%FT%T", &clock_tm);
-    fprintf(LOG_ERROR, "device time = %s\n", time_string);
+    LOG(LOG_ERROR, "device time = %s", time_string);
 
     struct tm now_tm;
     gmtime_r(&now, &now_tm);
     strftime(time_string, sizeof time_string, "%FT%T", &now_tm);
-    fprintf(LOG_ERROR, "        now = %s\n", time_string);
+    LOG(LOG_ERROR, "        now = %s", time_string);
 
     clock_write(ctx);
 
     return (int)difference;
   }
 
-  fprintf(LOG_INFO, "Device time is %.0lfs ahead\n", difference);
+  LOG(LOG_INFO, "Device time is %.0lfs ahead", difference);
 
   return EXIT_SUCCESS;
 }
 
-int query_device_failed(modbus_t *ctx, const uint8_t device_id, const char *message) {
+int query_device_failed(modbus_t *ctx, char const message[static 1]) {
   if (errno) {
-    fprintf(LOG_ERROR, "[Device %" PRIu8 "] %s: %s (%d)\n", device_id, message, modbus_strerror(errno), errno);
+    PERROR("%s: %s (%d)", message, modbus_strerror(errno), errno);
   }
 
   if (ctx) {
@@ -193,73 +210,42 @@ int query_device_failed(modbus_t *ctx, const uint8_t device_id, const char *mess
   return (errno ? errno : 9001); // NOLINT: 9001 is an unassigned modbus errno
 }
 
-void read_register_failed(const uint8_t device_id, const REGISTER *reg) {
-  read_metric_failed_total[device_id]++;
+void read_register_failed(const REGISTER *reg) {
+  device_metrics.read_metric_failed_total++;
 
-  fprintf(LOG_ERROR, "[Device %" PRIu8 "] Reading register %" PRIu8 " (%s) failed", device_id, reg->address,
-          reg->human_name);
+  LOG(LOG_ERROR, "Reading register %" PRIu8 " (%s) failed", reg->address, reg->human_name);
 
   if (errno) {
-    fprintf(LOG_ERROR, ": %s (%d)", modbus_strerror(errno), errno);
+    PERROR("%s (%d)", modbus_strerror(errno), errno);
   }
-
-  fprintf(LOG_ERROR, "\n");
 }
 
-int query_device_thread(void *id_ptr) {
-  const uint8_t device_id = *((uint8_t *)id_ptr);
-  fprintf(LOG_DEBUG, "Querying device ID %" PRIu8 " in thread ID %lu...\n", device_id, thrd_current());
-
-  read_metric_failed_total[device_id] = 0;
-  read_metric_succeeded_total[device_id] = 0;
-
-  char *dest = device_metrics[device_id];
-  *dest = '\0'; // empty buffer content from previous queries
-
-  char device_id_label[32]; // NOLINT: 32 chars should never overflow since MAX_DEVICE_COUNT is small
-  snprintf(device_id_label, sizeof(device_id_label), "device_id=\"%" PRIu8 "\"", device_id);
-
-  modbus_t *ctx = NULL;
-  ctx = modbus_new_rtu("/dev/ttyUSB0", MODBUS_BAUD, MODBUS_PARITY, MODBUS_DATA_BIT, MODBUS_STOP_BIT);
-  if (ctx == NULL) {
-    return query_device_failed(ctx, device_id, "Unable to create the libmodbus context");
+int query_modbus(modbus_t *ctx) {
+  if (device_metrics.metrics) {
+    free(device_metrics.metrics);
   }
 
-  if (modbus_set_debug(ctx, DEBUG)) {
-    return query_device_failed(ctx, device_id, "Set debug flag failed");
-  }
-
-  if (modbus_set_response_timeout(ctx, MODBUS_RESPONSE_TIMEOUT, 0)) {
-    return query_device_failed(ctx, device_id, "Set response timeout failed");
-  }
-
-  if (modbus_set_slave(ctx, 1)) { // required with RTU mode
-    return query_device_failed(ctx, device_id, "Set slave failed");
-  }
-
-  if (modbus_connect(ctx)) {
-    return query_device_failed(ctx, device_id, "Connection failed");
-  }
+  device_metrics.metrics = malloc(sizeof(METRIC));
+  device_metrics.size = 0;
+  device_metrics.read_metric_failed_total = 0;
+  device_metrics.read_metric_succeeded_total = 0;
 
   const time_t now = time(NULL);
 
-  fprintf(LOG_DEBUG, "last_time_synced_at[%" PRIu8 "] = %lf\n", device_id,
-          difftime(now, last_time_synced_at[device_id]));
-  if (difftime(now, last_time_synced_at[device_id]) > 1 * DAY) {
+  LOG(LOG_TRACE, "now - last_time_synced_at = %.0lfs", difftime(now, device_metrics.last_time_synced_at));
+  if (difftime(now, device_metrics.last_time_synced_at) > 1 * DAY) {
     if (clock_sync(ctx)) {
-      fprintf(LOG_ERROR, "Synced time\n");
+      LOG(LOG_INFO, "Synced time");
     }
 
-    last_time_synced_at[device_id] = now;
+    device_metrics.last_time_synced_at = now;
   }
 
-  fprintf(LOG_DEBUG, "last_time_read_settings_at[%" PRIu8 "] = %lf\n", device_id,
-          difftime(now, last_time_read_settings_at[device_id]));
-  if (difftime(now, last_time_read_settings_at[device_id]) > 1 * HOUR) {
-    const uint8_t register_count = sizeof(holding_registers) / sizeof(REGISTER);
-    for (uint8_t index = 0; index < register_count; index++) {
+  LOG(LOG_TRACE, "now - last_time_read_settings_at = %.0lfs", difftime(now, device_metrics.last_time_read_settings_at));
+  if (difftime(now, device_metrics.last_time_read_settings_at) > 1 * HOUR) {
+    for (size_t index = 0; index < COUNT(holding_registers); index++) {
       const REGISTER reg = holding_registers[index];
-      int ret = -1;
+      ssize_t ret = -1;
       double result[2] = {0};
 
       switch (reg.register_size) {
@@ -272,23 +258,22 @@ int query_device_thread(void *id_ptr) {
         break;
 
       default:
-        return query_device_failed(ctx, device_id, "Unexpected register size");
+        return query_device_failed(ctx, "Unexpected register size");
       }
 
       if (-1 == ret) {
-        read_register_failed(device_id, &reg);
+        read_register_failed(&reg);
       } else {
         add_metric(reg.metric_name, *result);
       }
     }
 
-    last_time_read_settings_at[device_id] = now;
+    device_metrics.last_time_read_settings_at = now;
   }
 
-  const uint8_t register_count = sizeof(input_registers) / sizeof(REGISTER);
-  for (uint8_t index = 0; index < register_count; index++) {
+  for (size_t index = 0; index < COUNT(input_registers); index++) {
     const REGISTER reg = input_registers[index];
-    int ret = -1;
+    ssize_t ret = -1;
     double result[2] = {0};
 
     switch (reg.register_size) {
@@ -301,64 +286,123 @@ int query_device_thread(void *id_ptr) {
       break;
 
     default:
-      return query_device_failed(ctx, device_id, "Unexpected register size");
+      return query_device_failed(ctx, "Unexpected register size");
     }
 
     if (-1 == ret) {
-      read_register_failed(device_id, &reg);
+      read_register_failed(&reg);
     } else {
       add_metric(reg.metric_name, *result);
     }
   }
 
-  add_metric("read_metric_failed_total", (double)read_metric_failed_total[device_id]);
-  add_metric("read_metric_succeeded_total", (double)read_metric_succeeded_total[device_id]);
+  add_metric("read_metric_failed_total", device_metrics.read_metric_failed_total);
+  add_metric("read_metric_succeeded_total", device_metrics.read_metric_succeeded_total);
+
+  return device_metrics.read_metric_succeeded_total == 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
+static modbus_t *ctx = NULL;
+
+static void stop_modbus_thread(void) {
+  LOG(LOG_DEBUG, "Terminating Modbus thread");
 
   modbus_close(ctx);
   modbus_free(ctx);
 
-  return EXIT_SUCCESS;
+  LOG(LOG_TRACE, "Terminated Modbus thread");
 }
 
-int query(char *dest, const uint8_t *device_ids) {
-  *dest = '\0'; // empty buffer content from previous queries
+int start_modbus_thread(char device_or_uri[static 1]) {
+  LOG(LOG_DEBUG, "Modbus thread running...");
 
-  int count = 0;
-  while (device_ids[++count]) // NOLINT: counting IDs until we get a zero value
-    ;
-  fprintf(LOG_DEBUG, "Found %d device IDs to query\n", count);
+  if (atexit(stop_modbus_thread)) {
+    PERROR("Could not register cleanup routine");
+    return EXIT_FAILURE;
+  }
 
-  thrd_t threads[MAX_DEVICE_COUNT];
+  if (mtx_init(&device_metrics.mutex, mtx_plain) != thrd_success) {
+    PERROR("Could not initialize modbus mutex");
+    return EXIT_FAILURE;
+  }
 
-  for (int i = 0; i < count; i++) {
-    int status = thrd_create(&threads[i], (thrd_start_t)query_device_thread, (void *)(&(device_ids[i])));
-    if (status != thrd_success) {
-      fprintf(LOG_ERROR, "thrd_create() failed\n");
-      return EXIT_FAILURE;
+  char modbus_tcp_host[256];
+  int modbus_tcp_port = 0;
+  if (device_or_uri[0] != '/') {
+    // when starting with '/', assume it's a device like "/dev/ttyUSB"
+    // otherwise try to parse it as a "hostname:port" like "example.com:1234"
+    sscanf(device_or_uri, "%255[^:]:%d", modbus_tcp_host, &modbus_tcp_port);
+
+    if (modbus_tcp_port < 1 || modbus_tcp_port > USHRT_MAX) {
+      return query_device_failed(ctx, "Invalid port number");
     }
   }
 
-  for (int i = 0; i < count; i++) {
-    int result = 0;
-    const int thrd_ret = thrd_join(threads[i], &result);
+  if (modbus_tcp_port) {
+    ctx = modbus_new_tcp(modbus_tcp_host, modbus_tcp_port);
+  } else {
+    ctx = modbus_new_rtu(device_or_uri, MODBUS_BAUD, MODBUS_PARITY, MODBUS_DATA_BIT, MODBUS_STOP_BIT);
+    if (modbus_set_slave(ctx, 1)) { // required with RTU mode
+      return query_device_failed(ctx, "Set slave failed");
+    }
+  }
 
-    if (thrd_ret != thrd_success || result != EXIT_SUCCESS) {
-      fprintf(LOG_ERROR, "Thread %d failed (code = %d)\n", i, result);
+  if (ctx == NULL) {
+    return query_device_failed(ctx, "Unable to create the libmodbus context");
+  }
+
+  if (modbus_set_debug(ctx, DEBUG)) {
+    return query_device_failed(ctx, "Set debug flag failed");
+  }
+
+  if (modbus_set_response_timeout(ctx, MODBUS_RESPONSE_TIMEOUT, 0)) {
+    return query_device_failed(ctx, "Set response timeout failed");
+  }
+
+  if (modbus_connect(ctx)) {
+    return query_device_failed(ctx, "Modbus connection failed");
+  }
+
+  struct timespec before, after; // NOLINT(readability-isolate-declaration)
+
+  while (keep_running) {
+    clock_gettime(CLOCK_REALTIME, &before);
+    LOG(LOG_INFO, "Querying device %s...", device_or_uri);
+
+    mtx_lock(&device_metrics.mutex);
+    int result = query_modbus(ctx);
+    mtx_unlock(&device_metrics.mutex);
+
+    if (result != EXIT_SUCCESS) {
+      PERROR("query_modbus() failed (code = %d)", result);
       return EXIT_FAILURE;
     }
 
-    fprintf(LOG_DEBUG, "Thread %d succeeded (code = %d)\n", i, result);
-    const uint8_t device_id = device_ids[i];
-    const char *metrics = device_metrics[device_id];
-    fprintf(LOG_DEBUG, "Got metrics from device ID %" PRIu8 " (%zu bytes)\n", device_id, strlen(metrics));
+    clock_gettime(CLOCK_REALTIME, &after);
+    double const elapsed = after.tv_sec - before.tv_sec + (double)(after.tv_nsec - before.tv_nsec) / 1e9; // NOLINT
 
-    const uint16_t len = strlcat(dest, metrics, PROMETHEUS_RESPONSE_SIZE);
-    if (len >= PROMETHEUS_RESPONSE_SIZE) {
-      fprintf(LOG_ERROR, "buffer overflow: %" PRIu16 " >= %i\n", len, PROMETHEUS_RESPONSE_SIZE);
+    LOG(LOG_INFO, "Got %lu/%lu metrics in %.0fms", device_metrics.read_metric_succeeded_total,
+        device_metrics.read_metric_succeeded_total + device_metrics.read_metric_failed_total, elapsed * 1e3);
 
-      return ENAMETOOLONG;
+    /*
+    LOG(LOG_TRACE, "last_time_synced_at = %ld, last_time_read_settings_at = %ld", device_metrics.last_time_synced_at,
+        device_metrics.last_time_read_settings_at);
+
+    for (size_t i = 0; i < device_metrics.size; i++) {
+      METRIC metric = device_metrics.metrics[i];
+      LOG(LOG_TRACE, "%s = %lf", metric.name, metric.value);
+    }
+    */
+
+    LOG(LOG_DEBUG, "Waiting %d seconds...", REFRESH_PERIOD);
+    for (size_t i = 0; i < REFRESH_PERIOD; i++) {
+      sleep(1);
+      if (!keep_running)
+        thrd_exit(EXIT_SUCCESS);
     }
   }
 
   return EXIT_SUCCESS;
 }
+
+#endif /* GROWATT_MODBUS_H */

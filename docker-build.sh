@@ -4,16 +4,15 @@ set -euxo pipefail
 
 cd "$(dirname "$0")"
 
-target="${1:-growatt}"
-interactive="${2:-}"
-container=${target}-builder
+channel="${1:-stable}" # can be overriden with "bullseye" for example
+target=growatt
+container=${target}-builder-${channel}
 volume=/root/HOST
-channel=stable
 
 if [ -z "${FAST:-}" ]; then
-    docker pull debian:${channel}
+    docker pull "debian:${channel}"
 
-    [ "$(docker ps -qaf "name=${container}")" ] || docker run --name $container -d -t -v "${PWD}:${volume}" debian:${channel}
+    [ "$(docker ps -qaf "name=${container}")" ] || docker run --name $container -d -t -v "${PWD}:${volume}" "debian:${channel}"
 
     docker start $container
 
@@ -21,8 +20,10 @@ if [ -z "${FAST:-}" ]; then
     docker exec $container bash -c "echo \"deb http://ftp.sg.debian.org/debian ${channel} main\" | tee /etc/apt/sources.list"
     docker exec $container apt-get update
     docker exec $container apt-get upgrade -y
-    docker exec $container apt-get install -y make clang pkg-config
-    docker exec $container apt-get install -y libbsd-dev libmodbus-dev
+    #docker exec $container apt-get install -y gcc
+    docker exec $container apt-get install -y clang-13
+    docker exec $container apt-get install -y make pkg-config
+    docker exec $container apt-get install -y libbsd-dev libmodbus-dev libmosquitto-dev
     docker exec $container apt-get autoremove -y --purge
 fi
 

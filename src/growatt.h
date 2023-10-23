@@ -1,4 +1,9 @@
 #include <inttypes.h>
+#include <signal.h>
+
+#define COUNT(x) sizeof(x) / sizeof(x[0])
+
+static volatile sig_atomic_t keep_running = 1;
 
 enum {
   MAX_METRIC_LENGTH = 64,
@@ -14,6 +19,8 @@ typedef struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) {
   char metric_name[MAX_METRIC_LENGTH];
   enum { REGISTER_SINGLE, REGISTER_DOUBLE } register_size;
   double scale;
+  char device_class[MAX_METRIC_LENGTH];
+  char unit[MAX_METRIC_LENGTH];
 } REGISTER;
 
 const REGISTER holding_registers[] = {
@@ -47,7 +54,7 @@ const REGISTER input_registers[] = {
     {26, "DC-DC temperature", "temperature_dcdc_celsius", REGISTER_SINGLE, 0.1},
     {27, "inverter load percent", "inverter_load_percent", REGISTER_SINGLE, 0.1},
     // {30, "work time total", "work_time_total_seconds", REGISTER_DOUBLE, 0.5}, // XXX: always zero
-    {32, "buck1 temperature", "temperature_buck1_celsius", REGISTER_SINGLE, 0.1},
+    {32, "buck1 temperature", "temperature_buck1_celsius", REGISTER_SINGLE, 0.1, "temperature", "0C"},
     // {33, "buck2 temperature", "temperature_buck2_celsius", REGISTER_SINGLE, 0.1}, // irrelevant
     {34, "output current", "output_amps", REGISTER_SINGLE, 0.1},
     {35, "inverter current", "inverter_amps", REGISTER_SINGLE, 0.1},
@@ -58,7 +65,7 @@ const REGISTER input_registers[] = {
     // {45, "product check step", "product_check_step", REGISTER_SINGLE, 1}, // irrelevant
     // {46, "production line mode", "production_line_mode", REGISTER_SINGLE, 1}, // XXX: always zero
     // {47, "constant power OK flag", "constant_power_ok_flag", REGISTER_SINGLE, 1}, // XXX: always zero
-    {48, "PV energy today", "energy_pv_today_kwh", REGISTER_DOUBLE, 0.1},
+    {48, "PV energy today", "energy_pv_today_kwh", REGISTER_DOUBLE, 0.1, "energy", "kWh"},
     {50, "PV energy total", "energy_pv_total_kwh", REGISTER_DOUBLE, 0.1},
     {56, "grid energy today", "energy_grid_today_kwh", REGISTER_DOUBLE, 0.1},
     {58, "grid energy total", "energy_grid_total_kwh", REGISTER_DOUBLE, 0.1},
