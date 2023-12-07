@@ -173,7 +173,7 @@ int start_mqtt_thread(void *config_ptr) {
 
     LOG(LOG_DEBUG, "Waiting %u seconds...", PUBLISH_PERIOD);
     for (size_t i = 0; i < PUBLISH_PERIOD; i++) {
-      sleep(PUBLISH_PERIOD); // NOLINT(concurrency-mt-unsafe)
+      sleep(1); // NOLINT(concurrency-mt-unsafe)
       if (!keep_running) {
         return EXIT_SUCCESS;
       }

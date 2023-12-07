@@ -400,7 +400,7 @@ int start_modbus_thread(char device_or_uri[static 1]) {
 
     LOG(LOG_INFO, "Waiting %d seconds...", REFRESH_PERIOD);
     for (size_t i = 0; i < REFRESH_PERIOD; i++) {
-      sleep(REFRESH_PERIOD); // NOLINT(concurrency-mt-unsafe)
+      sleep(1); // NOLINT(concurrency-mt-unsafe)
       if (!keep_running) {
         return EXIT_SUCCESS;
       }
