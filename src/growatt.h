@@ -1,15 +1,19 @@
+#ifndef GROWATT_GROWATT_H
+#define GROWATT_GROWATT_H
+
 #include <inttypes.h>
 #include <signal.h>
 
-#define COUNT(x) sizeof(x) / sizeof(x[0])
+#define COUNT(x) (sizeof(x) / sizeof((x)[0])) // NOLINT(bugprone-sizeof-expression)
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static volatile sig_atomic_t keep_running = 1;
 
 enum {
-  MAX_METRIC_LENGTH = 64,
+  MAX_METRIC_LENGTH = 64U,
   CLOCK_OFFSET_THRESHOLD = 30, // seconds
   REGISTER_CLOCK_ADDRESS = 45,
-  REGISTER_CLOCK_SIZE = 6,
+  REGISTER_CLOCK_SIZE = 6U,
   REGISTER_CLOCK_YEAR_OFFSET = -1900, // years
 };
 
@@ -24,18 +28,18 @@ typedef struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) {
 } REGISTER;
 
 const REGISTER holding_registers[] = {
-    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    // NOLINTBEGIN(readability-magic-numbers)
     {34, "max charging current", "settings_max_charging_amps", REGISTER_SINGLE, 1},
     {35, "bulk charging voltage", "settings_bulk_charging_volts", REGISTER_SINGLE, 0.1},
     {36, "float charging voltage", "settings_float_charging_volts", REGISTER_SINGLE, 0.1},
     {37, "battery voltage switch to utility", "settings_switch_to_utility_volts", REGISTER_SINGLE, 0.1},
     // {76, "rated active power", "rated_active_power_watts", REGISTER_DOUBLE, 0.1}, // XXX: not needed
     // {78, "rated apparant power", "rated_apparant_power_va", REGISTER_DOUBLE, 0.1}, // XXX: not needed
-    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    // NOLINTEND(readability-magic-numbers)
 };
 
 const REGISTER input_registers[] = {
-    // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    // NOLINTBEGIN(readability-magic-numbers)
     {0, "system status", "system_status", REGISTER_SINGLE, 1},
     {1, "PV1 voltage", "pv1_volts", REGISTER_SINGLE, 0.1},
     {3, "PV1 power", "pv1_watts", REGISTER_DOUBLE, 0.1},
@@ -79,5 +83,7 @@ const REGISTER input_registers[] = {
     // {81, "fan speed MPPT", "fan_speed_mppt", REGISTER_SINGLE, 1}, // XXX: always zero
     {82, "fan speed inverter", "fan_speed_inverter", REGISTER_SINGLE, 1},
     // {180, "solar charger status", "solar_status", REGISTER_SINGLE, 1}, // XXX: always zero
-    // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    // NOLINTEND(readability-magic-numbers)
 };
+
+#endif /* GROWATT_GROWATT_H */

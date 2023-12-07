@@ -1,4 +1,5 @@
 #include "../src/growatt.h"
+#include "../src/modbus.h"
 #include <assert.h>
 #include <errno.h>
 #include <modbus.h>
@@ -7,7 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 
-enum { PORT = 1502 };
+enum { PORT = 1502, MS = 1000U };
 
 int main(void) {
   // rand() initialization, should only be called once
@@ -20,7 +21,7 @@ int main(void) {
       modbus_mapping_new_start_address(0, 0, 0, 0, 0, REGISTER_CLOCK_ADDRESS + REGISTER_CLOCK_SIZE + 1, 0,
                                        input_registers[COUNT(input_registers) - 1].address + 1);
 
-  // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+  // NOLINTBEGIN(readability-magic-numbers)
   mapping->tab_registers[34] = 80;                         // settings_max_charging_amps
   mapping->tab_registers[35] = 580;                        // settings_bulk_charging_volts (x10)
   mapping->tab_registers[36] = 544;                        // settings_float_charging_volts (x10)
@@ -30,7 +31,7 @@ int main(void) {
   mapping->tab_input_registers[3] = 0;         // pv1_watts (double size register)
   mapping->tab_input_registers[4] = 100 * 10;  // pv1_watts (double size register)
   mapping->tab_input_registers[17] = 50 * 100; // battery_volts
-  // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+  // NOLINTEND(readability-magic-numbers)
 
   if (mapping == NULL) {
     fprintf(stderr, "Failed to allocate the mapping: %s\n", modbus_strerror(errno));
@@ -45,16 +46,30 @@ int main(void) {
 
   uint8_t req[MODBUS_RTU_MAX_ADU_LENGTH]; // request buffer
   int len = -1;                           // length of the request/response
-  while (1) {
+  size_t index = 0;
+  while (++index) {
     if ((len = modbus_receive(ctx, req)) == -1) {
+      perror("modbus_receive");
       break;
     }
 
-    // simulate random delay up to 200ms
-    const size_t delay = (rand() % 200) * 1e3; // NOLINT
+    // simulate random delay
+    const size_t delay = rand() % MODBUS_RESPONSE_TIMEOUT; // NOLINT
     usleep(delay);
 
+    // simulate timeout after a while to ensure the program is exiting
+    if (index > 95) { // NOLINT(readability-magic-numbers)
+      printf("Mock server timeout mode activated, sleeping %dms...\n", MODBUS_RESPONSE_TIMEOUT / MS);
+      usleep(MODBUS_RESPONSE_TIMEOUT); // NOLINT(concurrency-mt-unsafe)
+    }
+
     if (modbus_reply(ctx, req, len, mapping) == -1) {
+      perror("modbus_reply");
+      break;
+    }
+
+    if (index > 100) { // NOLINT(readability-magic-numbers)
+      printf("Mock server exiting...\n");
       break;
     }
   }

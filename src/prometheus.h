@@ -2,7 +2,6 @@
 #include <bsd/string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <unistd.h> // close()
 
 #include "log.h"
@@ -16,6 +15,9 @@ enum {
 
 #define PROMETHEUS_CONTENT_TYPE "text/plain; version=0.0.4; charset=utf-8"
 #define REQUEST_PROMETHEUS "GET /metrics"
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static int server_socket;
 
 int set_response(char *response) {
   char metrics[RESPONSE_BUFFER_SIZE] = {0};
@@ -55,8 +57,6 @@ int set_response(char *response) {
 }
 
 int handle_client(const int client_fd) {
-  struct timespec before, after; // NOLINT(readability-isolate-declaration)
-  clock_gettime(CLOCK_REALTIME, &before);
   LOG(LOG_DEBUG, "HTTP server received request...");
 
   int code = EXIT_SUCCESS;
@@ -88,31 +88,21 @@ int handle_client(const int client_fd) {
     return EXIT_FAILURE;
   }
 
-  clock_gettime(CLOCK_REALTIME, &after);
-  double const elapsed = after.tv_sec - before.tv_sec + (double)(after.tv_nsec - before.tv_nsec) / 1e9; // NOLINT
-  LOG(LOG_INFO, "HTTP server sent response (%zu bytes) in %.0fms", strlen(response), elapsed * 1e3);
+  LOG(LOG_INFO, "HTTP server sent response (%zu bytes)", strlen(response));
 
   return code;
 }
 
-static int server_socket;
-
 static void stop_prometheus_thread(void) {
-  LOG(LOG_DEBUG, "Terminating Prometheus thread");
-
   if (shutdown(server_socket, SHUT_RD)) {
-    PERROR("shutdown failed");
+    PERROR("shutdown failed"); // NOLINT
   }
   if (close(server_socket)) {
-    PERROR("close failed");
+    PERROR("close failed"); // NOLINT
   }
-
-  LOG(LOG_TRACE, "Terminated Prometheus thread");
-  // thrd_exit(EXIT_SUCCESS);
 }
 
-static void sig_handler(int signal) {
-  LOG(LOG_INFO, "Got signal %d, exiting...", signal);
+static void sig_handler() {
   keep_running = 0;
   stop_prometheus_thread();
 }
@@ -152,9 +142,8 @@ int start_prometheus_thread(void *port_value) {
       if (keep_running) {
         PERROR("HTTP server could not accept request");
         return EXIT_FAILURE;
-      } else {
-        return EXIT_SUCCESS;
       }
+      return EXIT_SUCCESS;
     }
 
     handle_client(client_fd);

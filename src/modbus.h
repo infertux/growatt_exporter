@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <threads.h>
 #include <time.h>
+#include <unistd.h> // sleep()
 
 #include "growatt.h"
 #include "log.h"
@@ -34,14 +35,15 @@ enum {
   MODBUS_PARITY = 'N',
   MODBUS_DATA_BIT = 8,
   MODBUS_STOP_BIT = 1,
-  MODBUS_RESPONSE_TIMEOUT = 1, // second
+  MODBUS_RESPONSE_TIMEOUT = 200000U, // in us
 };
 
 enum {
   REGISTER_SIZE = 16U,
+  HEX_SIZE = 8U, // bytes for hex representation
 };
 
-typedef struct {
+typedef struct __attribute__((aligned(METRIC_BUFFER_SIZE / 2))) {
   char name[METRIC_BUFFER_SIZE];
   double value;
 } METRIC;
@@ -49,7 +51,7 @@ typedef struct {
 /**
  * Use (blocking) mutex to access struct
  */
-typedef struct {
+typedef struct __attribute__((aligned(METRIC_BUFFER_SIZE / 2))) {
   mtx_t mutex;
   METRIC *metrics;
   /** Number of metrics stored in array (for internal use) */
@@ -67,12 +69,20 @@ typedef struct {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 METRICS device_metrics;
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static modbus_t *ctx = NULL;
+
 void add_metric(char const name[static 1], const double value) {
   METRIC metric;
   strlcpy(metric.name, name, METRIC_BUFFER_SIZE);
   metric.value = value;
 
-  device_metrics.metrics = realloc(device_metrics.metrics, (device_metrics.size + 1) * sizeof(metric));
+  METRIC *new_metrics = realloc(device_metrics.metrics, (device_metrics.size + 1) * sizeof(metric));
+  if (new_metrics == NULL) {
+    PERROR("realloc failed");
+    exit(errno);
+  }
+  device_metrics.metrics = new_metrics;
   device_metrics.metrics[device_metrics.size++] = metric;
 
   if (strcmp(name, "read_metric_failed_total") != 0 && strcmp(name, "read_metric_succeeded_total") != 0) {
@@ -83,7 +93,7 @@ void add_metric(char const name[static 1], const double value) {
 #define modbus_read_holding_registers modbus_read_registers
 #define modbus_write_holding_registers modbus_write_registers
 
-int read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
+ssize_t read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[1] = {0};
   ssize_t ret = modbus_read_holding_registers(ctx, addr, 1, buffer);
   *value = (double)buffer[0] * scale;
@@ -91,7 +101,7 @@ int read_holding_register_scaled_by(modbus_t *ctx, const int addr, double *value
   return ret;
 }
 
-int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
+ssize_t read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[2] = {0};
   ssize_t ret = modbus_read_holding_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
@@ -100,7 +110,7 @@ int read_holding_register_double_scaled_by(modbus_t *ctx, const int addr, double
   return ret;
 }
 
-int read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
+ssize_t read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[1] = {0};
   ssize_t ret = modbus_read_input_registers(ctx, addr, 1, buffer);
   *value = (double)buffer[0] * scale;
@@ -108,7 +118,7 @@ int read_input_register_scaled_by(modbus_t *ctx, const int addr, double *value, 
   return ret;
 }
 
-int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
+ssize_t read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *value, double scale) {
   uint16_t buffer[2] = {0};
   ssize_t ret = modbus_read_input_registers(ctx, addr, 2, buffer);
   // NOLINTNEXTLINE(hicpp-signed-bitwise)
@@ -117,12 +127,12 @@ int read_input_register_double_scaled_by(modbus_t *ctx, const int addr, double *
   return ret;
 }
 
-inline void print_register(char *dest, const uint16_t *reg, const uint8_t size) {
-  assert(size < 8);
-  char buffer[8];
+void print_register(char *dest, const uint16_t *reg, const uint8_t size) {
+  assert(size < HEX_SIZE);
+  char buffer[HEX_SIZE];
   for (int i = 0; i < size; i++) {
     sprintf(buffer, "%04X·", reg[i]);
-    strlcat(dest, buffer, 64);
+    strlcat(dest, buffer, (size_t)REGISTER_CLOCK_SIZE * HEX_SIZE);
   }
   dest[strlen(dest) - 1] = 0; // delete last '·'
 }
@@ -142,7 +152,7 @@ void clock_write(modbus_t *ctx) {
       now_tm.tm_sec,
   };
 
-  char hex[64] = {0};
+  char hex[REGISTER_CLOCK_SIZE * HEX_SIZE] = {0};
   print_register(hex, clock, REGISTER_CLOCK_SIZE);
   LOG(LOG_DEBUG, "About to write %s into clock register", hex);
 
@@ -160,7 +170,7 @@ int clock_sync(modbus_t *ctx) {
     return INT_MAX;
   }
 
-  char hex[64] = {0};
+  char hex[REGISTER_CLOCK_SIZE * HEX_SIZE] = {0};
   print_register(hex, clock, REGISTER_CLOCK_SIZE);
   LOG(LOG_DEBUG, "Clock register is %s", hex);
 
@@ -296,21 +306,15 @@ int query_modbus(modbus_t *ctx) {
     }
   }
 
-  add_metric("read_metric_failed_total", device_metrics.read_metric_failed_total);
-  add_metric("read_metric_succeeded_total", device_metrics.read_metric_succeeded_total);
+  add_metric("read_metric_failed_total", (double)device_metrics.read_metric_failed_total);
+  add_metric("read_metric_succeeded_total", (double)device_metrics.read_metric_succeeded_total);
 
   return device_metrics.read_metric_succeeded_total == 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
-static modbus_t *ctx = NULL;
-
 static void stop_modbus_thread(void) {
-  LOG(LOG_DEBUG, "Terminating Modbus thread");
-
   modbus_close(ctx);
   modbus_free(ctx);
-
-  LOG(LOG_TRACE, "Terminated Modbus thread");
 }
 
 int start_modbus_thread(char device_or_uri[static 1]) {
@@ -326,12 +330,12 @@ int start_modbus_thread(char device_or_uri[static 1]) {
     return EXIT_FAILURE;
   }
 
-  char modbus_tcp_host[256];
+  char modbus_tcp_host[256]; // NOLINT(readability-magic-numbers)
   int modbus_tcp_port = 0;
   if (device_or_uri[0] != '/') {
     // when starting with '/', assume it's a device like "/dev/ttyUSB"
     // otherwise try to parse it as a "hostname:port" like "example.com:1234"
-    sscanf(device_or_uri, "%255[^:]:%d", modbus_tcp_host, &modbus_tcp_port);
+    sscanf(device_or_uri, "%255[^:]:%d", modbus_tcp_host, &modbus_tcp_port); // NOLINT(cert-err34-c)
 
     if (modbus_tcp_port < 1 || modbus_tcp_port > USHRT_MAX) {
       return query_device_failed(ctx, "Invalid port number");
@@ -355,7 +359,7 @@ int start_modbus_thread(char device_or_uri[static 1]) {
     return query_device_failed(ctx, "Set debug flag failed");
   }
 
-  if (modbus_set_response_timeout(ctx, MODBUS_RESPONSE_TIMEOUT, 0)) {
+  if (modbus_set_response_timeout(ctx, 0, MODBUS_RESPONSE_TIMEOUT)) {
     return query_device_failed(ctx, "Set response timeout failed");
   }
 
@@ -381,8 +385,8 @@ int start_modbus_thread(char device_or_uri[static 1]) {
     clock_gettime(CLOCK_REALTIME, &after);
     double const elapsed = after.tv_sec - before.tv_sec + (double)(after.tv_nsec - before.tv_nsec) / 1e9; // NOLINT
 
-    LOG(LOG_INFO, "Got %lu/%lu metrics in %.0fms", device_metrics.read_metric_succeeded_total,
-        device_metrics.read_metric_succeeded_total + device_metrics.read_metric_failed_total, elapsed * 1e3);
+    LOG(LOG_INFO, "Got %lu/%lu metrics in %.1fs", device_metrics.read_metric_succeeded_total,
+        device_metrics.read_metric_succeeded_total + device_metrics.read_metric_failed_total, elapsed);
 
     /*
     LOG(LOG_TRACE, "last_time_synced_at = %ld, last_time_read_settings_at = %ld", device_metrics.last_time_synced_at,
@@ -394,11 +398,12 @@ int start_modbus_thread(char device_or_uri[static 1]) {
     }
     */
 
-    LOG(LOG_DEBUG, "Waiting %d seconds...", REFRESH_PERIOD);
+    LOG(LOG_INFO, "Waiting %d seconds...", REFRESH_PERIOD);
     for (size_t i = 0; i < REFRESH_PERIOD; i++) {
-      sleep(1);
-      if (!keep_running)
-        thrd_exit(EXIT_SUCCESS);
+      sleep(REFRESH_PERIOD); // NOLINT(concurrency-mt-unsafe)
+      if (!keep_running) {
+        return EXIT_SUCCESS;
+      }
     }
   }
 

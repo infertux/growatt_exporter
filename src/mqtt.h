@@ -15,9 +15,11 @@ enum {
   RESPONSE_SIZE = 8192U,
   PUBLISH_PERIOD = 15U, // seconds
   MQTT_CONFIG_SIZE = 128U,
+  MQTT_METRIC_ID_SIZE = 64U,
+  MQTT_METRIC_PAYLOAD_SIZE = 2048U,
 };
 
-typedef struct __attribute__((aligned(MQTT_CONFIG_SIZE * 4))) {
+typedef struct __attribute__((aligned(MQTT_CONFIG_SIZE))) {
   char _padding[4]; // XXX: prevents the 'host' member from getting corrupted sometimes?!
   char host[MQTT_CONFIG_SIZE];
   uint16_t port;
@@ -25,24 +27,21 @@ typedef struct __attribute__((aligned(MQTT_CONFIG_SIZE * 4))) {
   char password[MQTT_CONFIG_SIZE];
 } mqtt_config;
 
-static struct mosquitto *mosq = NULL;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static struct mosquitto *client = NULL;
 
 static void stop_mqtt_thread(void) {
-  LOG(LOG_DEBUG, "Terminating MQTT thread");
-
-  mosquitto_disconnect(mosq);
-  mosquitto_destroy(mosq);
+  mosquitto_disconnect(client);
+  mosquitto_destroy(client);
 
   mosquitto_lib_cleanup();
-
-  LOG(LOG_TRACE, "Terminated MQTT thread");
 }
 
-void connection_callback(struct mosquitto *mosq, void *obj, int rc) {
-  if (rc) {
-    LOG(LOG_ERROR, "Cannot connect to broker: %s (%d)\n", mosquitto_connack_string(rc), rc);
+void connection_callback(struct mosquitto *_mosq, void *_obj, int code) { // NOLINT(misc-unused-parameters)
+  if (code) {
+    LOG(LOG_ERROR, "Cannot connect to broker: %s (%d)\n", mosquitto_connack_string(code), code);
     stop_mqtt_thread();
-    exit(rc);
+    thrd_exit(code);
   }
 }
 
@@ -56,43 +55,40 @@ int start_mqtt_thread(void *config_ptr) {
 
   mosquitto_lib_init();
 
-  mosq = mosquitto_new("growatt-exporter", true, NULL);
-  if (!mosq) {
-    PERROR("Cannot create mosquitto socket");
+  client = mosquitto_new("growatt-exporter", true, NULL);
+  if (!client) {
+    PERROR("Cannot create mosquitto client instance");
     return EXIT_FAILURE;
   }
 
-  mosquitto_connect_callback_set(mosq, connection_callback);
+  mosquitto_connect_callback_set(client, connection_callback);
 
   assert(strlen(config->username) > 0);
   assert(strlen(config->password) > 0);
-  if (mosquitto_username_pw_set(mosq, config->username, config->password) != MOSQ_ERR_SUCCESS) {
+  if (mosquitto_username_pw_set(client, config->username, config->password) != MOSQ_ERR_SUCCESS) {
     LOG(LOG_ERROR, "Cannot set username/password");
-    stop_mqtt_thread();
     return EXIT_FAILURE;
   }
 
   assert(strlen(config->host) > 0);
-  if (mosquitto_connect(mosq, config->host, config->port, MQTT_KEEPALIVE) != MOSQ_ERR_SUCCESS) {
+  if (mosquitto_connect(client, config->host, config->port, MQTT_KEEPALIVE) != MOSQ_ERR_SUCCESS) {
     PERROR("MQTT client could not connect to %s:%" PRIu16, config->host, config->port);
-    stop_mqtt_thread();
     return EXIT_FAILURE;
   }
 
-  if (mosquitto_loop_start(mosq) !=
+  if (mosquitto_loop_start(client) !=
       MOSQ_ERR_SUCCESS) { // without this statement, the callback is not called upon connection
     PERROR("Unable to start loop");
-    stop_mqtt_thread();
     return EXIT_FAILURE;
   }
 
   LOG(LOG_INFO, "Connected to the MQTT broker");
 
   // TODO:
-  char payload[2048];
-  char metric_id[32];
-  char unique_id[64];
-  char topic[128];
+  char payload[MQTT_METRIC_PAYLOAD_SIZE];
+  char metric_id[MQTT_METRIC_ID_SIZE];
+  char unique_id[MQTT_METRIC_ID_SIZE];
+  char topic[MQTT_METRIC_ID_SIZE * 2];
 
   sprintf(metric_id, "battery_volts");
   sprintf(unique_id, "growatt_%s", metric_id);
@@ -104,7 +100,7 @@ int start_mqtt_thread(void *config_ptr) {
           TOPIC_STATE, metric_id, unique_id);
 
   sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(mosq, NULL, topic, (int)strlen(payload), payload, 0, true);
+  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, true);
 
   sprintf(metric_id, "pv1_watts");
   sprintf(unique_id, "growatt_%s", metric_id);
@@ -116,7 +112,7 @@ int start_mqtt_thread(void *config_ptr) {
           TOPIC_STATE, metric_id, unique_id);
 
   sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(mosq, NULL, topic, (int)strlen(payload), payload, 0, true);
+  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, true);
 
   sprintf(metric_id, "pv1_volts");
   sprintf(unique_id, "growatt_%s", metric_id);
@@ -128,7 +124,7 @@ int start_mqtt_thread(void *config_ptr) {
           TOPIC_STATE, metric_id, unique_id);
 
   sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(mosq, NULL, topic, (int)strlen(payload), payload, 0, false);
+  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, false);
 
   sprintf(metric_id, "energy_pv_today_kwh");
   sprintf(unique_id, "growatt_%s", metric_id); // should be on Energy Dashboard because of "device_class: energy"
@@ -151,7 +147,7 @@ int start_mqtt_thread(void *config_ptr) {
           TOPIC_STATE, metric_id, unique_id);
 
   sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(mosq, NULL, topic, (int)strlen(payload), payload, 0, false);
+  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, false);
 
   char metrics[RESPONSE_SIZE] = {0};
   char buffer[RESPONSE_SIZE] = {0};
@@ -172,14 +168,15 @@ int start_mqtt_thread(void *config_ptr) {
 
     if (strlen(metrics) > 1) { // don't publish empty metrics
       LOG(LOG_INFO, "Publishing status (%zu bytes) to broker...", strlen(metrics));
-      mosquitto_publish(mosq, NULL, TOPIC_STATE, (int)strlen(metrics), metrics, 0 /* QoS */, false /* retain */);
+      mosquitto_publish(client, NULL, TOPIC_STATE, (int)strlen(metrics), metrics, 0 /* QoS */, false /* retain */);
     }
 
     LOG(LOG_DEBUG, "Waiting %u seconds...", PUBLISH_PERIOD);
     for (size_t i = 0; i < PUBLISH_PERIOD; i++) {
-      sleep(1);
-      if (!keep_running)
-        thrd_exit(EXIT_SUCCESS);
+      sleep(PUBLISH_PERIOD); // NOLINT(concurrency-mt-unsafe)
+      if (!keep_running) {
+        return EXIT_SUCCESS;
+      }
     }
   }
 

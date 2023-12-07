@@ -11,6 +11,7 @@
 
 enum {
   RADIX_DECIMAL = 10,
+  STDC_VERSION_MIN = 201710L,
 };
 
 static int usage(char const program[static 1]) {
@@ -37,17 +38,24 @@ static uint16_t parse_port(char const *string) {
   return port;
 }
 
-static void join_thread(thrd_t *thread, char const label[static 1]) {
-  int result = 0;
-  int code = thrd_join(*thread, &result);
+static int join_thread(thrd_t const *thread, char const label[static 1]) {
+  int value = 0;
+  int code = thrd_join(*thread, &value);
 
-  if (code != thrd_success || result != EXIT_SUCCESS) {
-    LOG(LOG_ERROR, "Thread %s failed (code = %d, result = %d)", label, code, result);
+  if (code != thrd_success || value != EXIT_SUCCESS) {
+    LOG(LOG_ERROR, "Thread %s failed with value %d (code = %d)", label, value, code);
+
+    keep_running = 0;
+
+    if (!strcmp(label, "MDBS")) {
+      stop_prometheus_thread();
+      // kill(SIGTERM, 0);
+    }
   } else {
     LOG(LOG_INFO, "Thread %s exited successfully", label);
   }
 
-  // exit(result); // will terminate all threads including 'main'
+  return value;
 }
 
 /*static void sig_handler(int signal)
@@ -57,7 +65,11 @@ static void join_thread(thrd_t *thread, char const label[static 1]) {
 }*/
 
 int main(int argc, char *argv[argc + 1]) {
-  static_assert(__STDC_VERSION__ >= 201710L, "C17+ required");
+  static_assert(__STDC_VERSION__ >= STDC_VERSION_MIN, "C17+ required");
+
+  // disable log buffering
+  setbuf(stdout, NULL);
+  setbuf(stderr, NULL);
 
   // signal(SIGINT, sig_handler);
 
@@ -81,12 +93,12 @@ int main(int argc, char *argv[argc + 1]) {
 
     argi += 2;
 
-    int status = thrd_create(&prometheus_thread, (thrd_start_t)start_prometheus_thread, (void *)port);
+    int status = thrd_create(&prometheus_thread, (thrd_start_t)start_prometheus_thread,
+                             (void *)port); // NOLINT(performance-no-int-to-ptr)
     if (status != thrd_success) {
       PERROR("thrd_create() failed");
       return EXIT_FAILURE;
     }
-    // thrd_detach(prometheus_thread);
   }
 
   if (!strcmp("--mqtt", argv[argi])) {
@@ -110,7 +122,6 @@ int main(int argc, char *argv[argc + 1]) {
       PERROR("thrd_create() failed");
       return EXIT_FAILURE;
     }
-    // thrd_detach(mqtt_thread);
   }
 
   int status = thrd_create(&modbus_thread, (thrd_start_t)start_modbus_thread, (void *)device_or_uri);
@@ -119,12 +130,15 @@ int main(int argc, char *argv[argc + 1]) {
     return EXIT_FAILURE;
   }
 
-  if (prometheus_thread)
-    join_thread(&prometheus_thread, "PRMT");
-  if (mqtt_thread)
-    join_thread(&mqtt_thread, "MQTT");
+  int value = join_thread(&modbus_thread, "MDBS");
 
-  join_thread(&modbus_thread, "MDBS");
+  if (prometheus_thread) {
+    value += join_thread(&prometheus_thread, "PRMT");
+  }
+  if (mqtt_thread) {
+    value += join_thread(&mqtt_thread, "MQTT");
+  }
 
-  return EXIT_SUCCESS;
+  LOG(LOG_INFO, "Bye");
+  exit(value); // will terminate any remaining threads
 }
