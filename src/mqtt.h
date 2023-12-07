@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h> // sleep()
 
+#include "growatt.h"
 #include "log.h"
 #include "modbus.h"
 
@@ -84,70 +85,23 @@ int start_mqtt_thread(void *config_ptr) {
 
   LOG(LOG_INFO, "Connected to the MQTT broker");
 
-  // TODO:
   char payload[MQTT_METRIC_PAYLOAD_SIZE];
-  char metric_id[MQTT_METRIC_ID_SIZE];
   char unique_id[MQTT_METRIC_ID_SIZE];
   char topic[MQTT_METRIC_ID_SIZE * 2];
 
-  sprintf(metric_id, "battery_volts");
-  sprintf(unique_id, "growatt_%s", metric_id);
-  sprintf(payload,
-          "{\"device_class\":\"voltage\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"V\",\"value_template\":\"{{"
-          "value_json.%s}}\",\"name\":\"Battery "
-          "voltage\",\"unique_id\":\"%s\",\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":"
-          "\"Growatt\"}}",
-          TOPIC_STATE, metric_id, unique_id);
+  for (size_t index = 0; index < COUNT(input_registers); index++) {
+    const REGISTER reg = input_registers[index];
 
-  sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, true);
+    sprintf(unique_id, "growatt_%s", reg.metric_name);
+    sprintf(payload,
+            "{\"device_class\":\"%s\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"%s\","
+            "\"value_template\":\"{{value_json.%s}}\",\"name\":\"%s\",\"unique_id\":\"%s\","
+            "\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":\"Growatt\"}}",
+            reg.device_class, TOPIC_STATE, reg.unit, reg.metric_name, reg.human_name, unique_id);
 
-  sprintf(metric_id, "pv1_watts");
-  sprintf(unique_id, "growatt_%s", metric_id);
-  sprintf(payload,
-          "{\"device_class\":\"power\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"W\",\"value_template\":\"{{"
-          "value_json.%s}}\",\"name\":\"PV1 "
-          "power\",\"unique_id\":\"%s\",\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":"
-          "\"Growatt\"}}",
-          TOPIC_STATE, metric_id, unique_id);
-
-  sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, true);
-
-  sprintf(metric_id, "pv1_volts");
-  sprintf(unique_id, "growatt_%s", metric_id);
-  sprintf(payload,
-          "{\"device_class\":\"voltage\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"V\",\"value_template\":\"{{"
-          "value_json.%s}}\",\"name\":\"PV1 "
-          "voltage\",\"unique_id\":\"%s\",\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":"
-          "\"Growatt\"}}",
-          TOPIC_STATE, metric_id, unique_id);
-
-  sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, false);
-
-  sprintf(metric_id, "energy_pv_today_kwh");
-  sprintf(unique_id, "growatt_%s", metric_id); // should be on Energy Dashboard because of "device_class: energy"
-  sprintf(payload,
-          "{\"device_class\":\"energy\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"kWh\",\"value_template\":\"{{"
-          "value_json.%s}}\",\"name\":\"PV production "
-          "today\",\"unique_id\":\"%s\",\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":"
-          "\"Growatt\"}}",
-          TOPIC_STATE, metric_id, unique_id);
-
-  sprintf(metric_id, "energy_pv_total_kwh");
-  sprintf(unique_id, "growatt_%s",
-          metric_id); // should be on Energy Dashboard because of "device_class: energy" and state_class
-  sprintf(payload,
-          "{\"device_class\":\"energy\",\"state_class\":\"total_increasing\",\"state_topic\":\"%s\",\"unit_of_"
-          "measurement\":\"kWh\",\"value_template\":\"{{"
-          "value_json.%s}}\",\"name\":\"PV production "
-          "total\",\"unique_id\":\"%s\",\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":"
-          "\"Growatt\"}}",
-          TOPIC_STATE, metric_id, unique_id);
-
-  sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
-  mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, false);
+    sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
+    mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, true);
+  }
 
   char metrics[RESPONSE_SIZE] = {0};
   char buffer[RESPONSE_SIZE] = {0};
