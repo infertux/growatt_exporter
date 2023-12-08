@@ -13,6 +13,10 @@ enum {
   REQUEST_BUFFER_SIZE = 1024,
 };
 
+typedef struct {
+  int port;
+} prometheus_config;
+
 #define PROMETHEUS_CONTENT_TYPE "text/plain; version=0.0.4; charset=utf-8"
 #define REQUEST_PROMETHEUS "GET /metrics"
 
@@ -107,17 +111,19 @@ static void sig_handler() {
   stop_prometheus_thread();
 }
 
-int start_prometheus_thread(void *port_value) {
+int start_prometheus_thread(void *config_ptr) {
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
 
-  uint16_t const port = (unsigned long)port_value;
+  prometheus_config *config = (prometheus_config *)config_ptr;
+
   server_socket = socket(AF_INET6,    // IPv6
                          SOCK_STREAM, // TCP
                          0            // protocol 0
   );
 
-  const struct sockaddr_in6 address = {.sin6_family = AF_INET6, .sin6_port = htons(port), .sin6_addr = in6addr_any};
+  const struct sockaddr_in6 address = {
+      .sin6_family = AF_INET6, .sin6_port = htons(config->port), .sin6_addr = in6addr_any};
 
   // prevent "bind failed: Address already in use" when restarting the program too quickly
   if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
@@ -134,7 +140,7 @@ int start_prometheus_thread(void *port_value) {
     return EXIT_FAILURE;
   }
 
-  LOG(LOG_INFO, "HTTP server listening on [::]:%" PRIu16 "...", port);
+  LOG(LOG_INFO, "HTTP server listening on [::]:%" PRIu16 "...", config->port);
   while (keep_running) {
     LOG(LOG_DEBUG, "HTTP server waiting for request...");
     const int client_fd = accept(server_socket, NULL, NULL); // NOLINT(android-cloexec-accept)

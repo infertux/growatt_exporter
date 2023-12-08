@@ -1,8 +1,8 @@
 CC=clang
 #CC=gcc
 RM=rm -fv
-CFLAGS=$(shell pkg-config --cflags libbsd libmodbus libmosquitto)
-LIBS=$(shell pkg-config --libs libbsd libmodbus libmosquitto) -pthread
+CFLAGS=$(shell pkg-config --cflags libbsd libconfig libmodbus libmosquitto)
+LIBS=$(shell pkg-config --libs libbsd libconfig libmodbus libmosquitto) -pthread
 SRCS=src/*
 TESTS=tests/*.c
 
@@ -23,7 +23,7 @@ test: growatt $(TESTS)
 	$(CC) -v $(shell pkg-config --libs --cflags libbsd libmodbus) -Wall -Werror -o tests/mock-server $(TESTS)
 	timeout 30 mosquitto_sub -h test.mosquitto.org -p 1884 -u rw -P readwrite -t homeassistant/sensor/growatt/state -d &
 	./tests/mock-server &
-	./growatt 127.0.0.1:1502 --prometheus 1234 --mqtt test.mosquitto.org 1884 wo writeonly || true
+	./growatt config-example.conf || true
 
 clean:
 	$(RM) growatt tests/mock-server

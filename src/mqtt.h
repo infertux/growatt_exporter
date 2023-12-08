@@ -20,12 +20,11 @@ enum {
   MQTT_METRIC_PAYLOAD_SIZE = 2048U,
 };
 
-typedef struct __attribute__((aligned(MQTT_CONFIG_SIZE))) {
-  char _padding[4]; // XXX: prevents the 'host' member from getting corrupted sometimes?!
-  char host[MQTT_CONFIG_SIZE];
-  uint16_t port;
-  char username[MQTT_CONFIG_SIZE];
-  char password[MQTT_CONFIG_SIZE];
+typedef struct __attribute__((aligned(32))) {
+  const char *host;
+  int port;
+  const char *username;
+  const char *password;
 } mqtt_config;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

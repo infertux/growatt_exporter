@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include <assert.h>
+#include <libconfig.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,28 +15,16 @@ enum {
   STDC_VERSION_MIN = 201710L,
 };
 
+typedef struct __attribute__((aligned(64))) {
+  const char *device_or_uri;
+  prometheus_config prometheus_config;
+  mqtt_config mqtt_config;
+} config;
+
 static int usage(char const program[static 1]) {
-  LOG(LOG_ERROR, "Usage: %s <device_or_uri> --prometheus <http_bind_port>", program);
-  LOG(LOG_ERROR, "Example: %s /dev/ttyUSB0 --prometheus 1234", program);
-  LOG(LOG_ERROR, "Example: %s 127.0.0.1:1502 --prometheus 1234", program);
-  LOG(LOG_ERROR, "");
-  LOG(LOG_ERROR, "Usage: %s <device_or_uri> --mqtt <broker_host> <broker_port> <broker_username> <broker_password>",
-      program);
-  LOG(LOG_ERROR, "Example: %s /dev/ttyUSB0 --mqtt localhost 1883 admin admin", program);
-  LOG(LOG_ERROR, "\nBoth prometheus and mqtt can be combined:");
-  LOG(LOG_ERROR, "Example: %s /dev/ttyUSB0 --prometheus 1234 --mqtt localhost 1883 admin admin", program);
+  fprintf(stderr, "Usage: %s <config_file>\n", program);
+  fprintf(stderr, "Example: %s /etc/growatt-exporter.conf\n", program);
   return EXIT_FAILURE;
-}
-
-static uint16_t parse_port(char const *string) {
-  const uint16_t port = strtol(string, NULL, RADIX_DECIMAL);
-
-  if (port < 1 || port > USHRT_MAX) {
-    LOG(LOG_ERROR, "Invalid port number: %d", port);
-    return 0;
-  }
-
-  return port;
 }
 
 static int join_thread(thrd_t const *thread, char const label[static 1]) {
@@ -64,6 +53,32 @@ static int join_thread(thrd_t const *thread, char const label[static 1]) {
   keep_running = 0;
 }*/
 
+int parse_config(config *config, config_t *parser, char const *filename) {
+  if (!config_read_file(parser, filename)) {
+    LOG(LOG_ERROR, "%s:%d - %s\n", config_error_file(parser), config_error_line(parser), config_error_text(parser));
+    return EXIT_FAILURE;
+  }
+
+  if (CONFIG_TRUE != config_lookup_string(parser, "device_or_uri", &config->device_or_uri)) {
+    LOG(LOG_ERROR, "No 'device_or_uri' setting in configuration file");
+    return EXIT_FAILURE;
+  }
+
+  if (CONFIG_TRUE != config_lookup_int(parser, "prometheus.port", &config->prometheus_config.port)) {
+    config->prometheus_config.port = 0;
+  }
+
+  if (CONFIG_TRUE != config_lookup_int(parser, "mqtt.port", &config->mqtt_config.port)) {
+    config->mqtt_config.port = 0;
+  }
+
+  config_lookup_string(parser, "mqtt.host", &config->mqtt_config.host);
+  config_lookup_string(parser, "mqtt.username", &config->mqtt_config.username);
+  config_lookup_string(parser, "mqtt.password", &config->mqtt_config.password);
+
+  return EXIT_SUCCESS;
+}
+
 int main(int argc, char *argv[argc + 1]) {
   static_assert(__STDC_VERSION__ >= STDC_VERSION_MIN, "C17+ required");
 
@@ -77,56 +92,46 @@ int main(int argc, char *argv[argc + 1]) {
     return usage(argv[0]);
   }
 
+  config config;
+  config_t parser_config;
+  config_init(&parser_config);
+  if (parse_config(&config, &parser_config, argv[1])) {
+    config_destroy(&parser_config);
+    return EXIT_FAILURE;
+  }
+
   thrd_t prometheus_thread = 0;
   thrd_t mqtt_thread = 0;
   thrd_t modbus_thread = 0;
 
-  char const *device_or_uri = argv[1];
-
-  uint8_t argi = 2;
-
-  if (!strcmp("--prometheus", argv[argi])) {
-    const unsigned long port = parse_port(argv[argi + 1]);
-    if (!port) {
-      return usage(argv[0]);
-    }
-
-    argi += 2;
-
-    int status = thrd_create(&prometheus_thread, (thrd_start_t)start_prometheus_thread,
-                             (void *)port); // NOLINT(performance-no-int-to-ptr)
+  if (config.prometheus_config.port) {
+    int status = thrd_create(&prometheus_thread, (thrd_start_t)start_prometheus_thread, &config.prometheus_config);
     if (status != thrd_success) {
       PERROR("thrd_create() failed");
+      config_destroy(&parser_config);
       return EXIT_FAILURE;
     }
   }
 
-  if (!strcmp("--mqtt", argv[argi])) {
-    if (argc < argi + 4) { // TODO: make user/pass optional
-      return usage(argv[0]);
-    }
-
-    const uint16_t port = parse_port(argv[argi + 2]);
-    if (!port) {
-      return usage(argv[0]);
-    }
-
-    mqtt_config config;
-    config.port = port;
-    strlcpy(config.host, argv[argi + 1], MQTT_CONFIG_SIZE);
-    strlcpy(config.username, argv[argi + 3], MQTT_CONFIG_SIZE);
-    strlcpy(config.password, argv[argi + 4], MQTT_CONFIG_SIZE);
-
-    int status = thrd_create(&mqtt_thread, (thrd_start_t)start_mqtt_thread, &config);
+  if (config.mqtt_config.port) {
+    int status = thrd_create(&mqtt_thread, (thrd_start_t)start_mqtt_thread, &config.mqtt_config);
     if (status != thrd_success) {
       PERROR("thrd_create() failed");
+      config_destroy(&parser_config);
       return EXIT_FAILURE;
     }
   }
 
-  int status = thrd_create(&modbus_thread, (thrd_start_t)start_modbus_thread, (void *)device_or_uri);
+  if (!prometheus_thread && !mqtt_thread) {
+    LOG(LOG_ERROR, "You must configure at least Prometheus or MQTT (or both)");
+    config_destroy(&parser_config);
+    return EXIT_FAILURE;
+  }
+
+  int status = thrd_create(&modbus_thread, (thrd_start_t)start_modbus_thread, (void *)config.device_or_uri);
   if (status != thrd_success) {
     PERROR("thrd_create() failed");
+    config_destroy(&parser_config);
     return EXIT_FAILURE;
   }
 
@@ -138,6 +143,8 @@ int main(int argc, char *argv[argc + 1]) {
   if (mqtt_thread) {
     value += join_thread(&mqtt_thread, "MQTT");
   }
+
+  config_destroy(&parser_config);
 
   LOG(LOG_INFO, "Bye");
   exit(value); // will terminate any remaining threads

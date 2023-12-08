@@ -7,7 +7,7 @@ This allows to monitor PV production, battery status, etc. on a nice Grafana int
 ## Build
 
 ```bash
-apt install clang libbsd-dev libmodbus-dev
+apt install clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
 make
 ```
 

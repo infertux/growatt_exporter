@@ -23,7 +23,7 @@ if [ -z "${FAST:-}" ]; then
     #docker exec $container apt-get install -y gcc
     docker exec $container apt-get install -y clang-13
     docker exec $container apt-get install -y make pkg-config
-    docker exec $container apt-get install -y libbsd-dev libmodbus-dev libmosquitto-dev
+    docker exec $container apt-get install -y libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev
     docker exec $container apt-get autoremove -y --purge
 fi
 

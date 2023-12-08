@@ -13,7 +13,7 @@ jobs:
     - uses: actions/checkout@v3
     - uses: awalsh128/cache-apt-pkgs-action@latest
       with:
-        packages: clang libbsd-dev libmodbus-dev libmosquitto-dev mosquitto-clients
+        packages: clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
     - name: make
       run: make
     - name: make lint
