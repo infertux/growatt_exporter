@@ -144,12 +144,7 @@ void clock_write(modbus_t *ctx) {
   gmtime_r(&now, &now_tm);
 
   const uint16_t clock[REGISTER_CLOCK_SIZE] = {
-      now_tm.tm_year - REGISTER_CLOCK_YEAR_OFFSET,
-      now_tm.tm_mon + 1,
-      now_tm.tm_mday,
-      now_tm.tm_hour,
-      now_tm.tm_min,
-      now_tm.tm_sec,
+      now_tm.tm_year - REGISTER_CLOCK_YEAR_OFFSET, now_tm.tm_mon + 1, now_tm.tm_mday, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec,
   };
 
   char hex[REGISTER_CLOCK_SIZE * HEX_SIZE] = {0};

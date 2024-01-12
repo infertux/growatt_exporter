@@ -12,7 +12,7 @@ enum {
   LOG_ERROR,
 };
 
-#define PERROR_HELPER(fmt, ...)                                                                                        \
+#define PERROR_HELPER(fmt, ...)                                                                                                            \
   fprintf(stderr, "\x1b[37;41m" fmt ": %s%s\n\x1b[0m", __VA_ARGS__, strerror(errno)) // NOLINT(concurrency-mt-unsafe)
 #define PERROR(...) PERROR_HELPER(__VA_ARGS__, "")
 
@@ -33,9 +33,8 @@ const char *log_prefix(const char filename[static 1]) {
   return "31m[????]";
 }
 
-#define LOG(level, string, ...)                                                                                        \
-  if (LOG_VERBOSE || level >= LOG_INFO)                                                                                \
-  fprintf((level == LOG_ERROR ? stderr : stdout), "\x1b[%s " string "\x1b[0m\n",                                       \
-          log_prefix(__FILE__) __VA_OPT__(, ) __VA_ARGS__)
+#define LOG(level, string, ...)                                                                                                            \
+  if (LOG_VERBOSE || level >= LOG_INFO)                                                                                                    \
+  fprintf((level == LOG_ERROR ? stderr : stdout), "\x1b[%s " string "\x1b[0m\n", log_prefix(__FILE__) __VA_OPT__(, ) __VA_ARGS__)
 
 #endif /* GROWATT_LOG_H */

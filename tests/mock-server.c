@@ -17,9 +17,8 @@ int main(void) {
   // assert there is nothing relevant after the clock register
   assert(holding_registers[COUNT(holding_registers) - 1].address < REGISTER_CLOCK_ADDRESS + REGISTER_CLOCK_SIZE);
 
-  modbus_mapping_t *mapping =
-      modbus_mapping_new_start_address(0, 0, 0, 0, 0, REGISTER_CLOCK_ADDRESS + REGISTER_CLOCK_SIZE + 1, 0,
-                                       input_registers[COUNT(input_registers) - 1].address + 1);
+  modbus_mapping_t *mapping = modbus_mapping_new_start_address(0, 0, 0, 0, 0, REGISTER_CLOCK_ADDRESS + REGISTER_CLOCK_SIZE + 1, 0,
+                                                               input_registers[COUNT(input_registers) - 1].address + 1);
 
   // NOLINTBEGIN(readability-magic-numbers)
   mapping->tab_registers[34] = 80;                         // settings_max_charging_amps

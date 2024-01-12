@@ -33,8 +33,7 @@ int set_response(char *response) {
     METRIC metric = device_metrics.metrics[i];
     // LOG(LOG_DEBUG, "%s = %lf\n", metric.name, metric.value);
 
-    snprintf(buffer, sizeof(buffer), "# TYPE growatt_%s gauge\ngrowatt_%s %lf\n", metric.name, metric.name,
-             metric.value);
+    snprintf(buffer, sizeof(buffer), "# TYPE growatt_%s gauge\ngrowatt_%s %lf\n", metric.name, metric.name, metric.value);
     strlcat(metrics, buffer, RESPONSE_BUFFER_SIZE);
   }
   mtx_unlock(&device_metrics.mutex);
@@ -122,8 +121,7 @@ int start_prometheus_thread(void *config_ptr) {
                          0            // protocol 0
   );
 
-  const struct sockaddr_in6 address = {
-      .sin6_family = AF_INET6, .sin6_port = htons(config->port), .sin6_addr = in6addr_any};
+  const struct sockaddr_in6 address = {.sin6_family = AF_INET6, .sin6_port = htons(config->port), .sin6_addr = in6addr_any};
 
   // prevent "bind failed: Address already in use" when restarting the program too quickly
   if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
