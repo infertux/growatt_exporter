@@ -10,8 +10,9 @@
 static volatile sig_atomic_t keep_running = 1;
 
 enum {
-  MAX_METRIC_LENGTH = 64U,
   CLOCK_OFFSET_THRESHOLD = 30, // seconds
+  EXIT_NO_METRICS = 4,
+  MAX_METRIC_LENGTH = 64U,
   REGISTER_CLOCK_ADDRESS = 45,
   REGISTER_CLOCK_SIZE = 6U,
   REGISTER_CLOCK_YEAR_OFFSET = -1900, // years

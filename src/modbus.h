@@ -309,7 +309,7 @@ int query_modbus(modbus_t *ctx) {
   add_metric("read_metric_failed_total", (double)device_metrics.read_metric_failed_total);
   add_metric("read_metric_succeeded_total", (double)device_metrics.read_metric_succeeded_total);
 
-  return device_metrics.read_metric_succeeded_total == 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+  return device_metrics.read_metric_succeeded_total == 0 ? EXIT_NO_METRICS : EXIT_SUCCESS;
 }
 
 static void stop_modbus_thread(void) {
@@ -379,7 +379,7 @@ int start_modbus_thread(char device_or_uri[static 1]) {
 
     if (result != EXIT_SUCCESS) {
       PERROR("query_modbus() failed (code = %d)", result);
-      return EXIT_FAILURE;
+      return result;
     }
 
     clock_gettime(CLOCK_REALTIME, &after);

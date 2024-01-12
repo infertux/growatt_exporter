@@ -2,3 +2,4 @@
 - test program with either --mqtt XOR --prometheus but not both
 - go through commented code
 - fix all lint warnings
+- use condition variables to exit all threads cleanly?

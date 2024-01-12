@@ -135,6 +135,7 @@ int main(int argc, char *argv[argc + 1]) {
     return EXIT_FAILURE;
   }
 
+  // FIXME: catch MQTT thread termination somehow
   int value = join_thread(&modbus_thread, "MDBS");
 
   if (prometheus_thread) {
