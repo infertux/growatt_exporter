@@ -309,7 +309,6 @@ int query_modbus(modbus_t *ctx) {
 
 static void stop_modbus_thread(void) {
   modbus_close(ctx);
-  modbus_free(ctx);
 }
 
 int start_modbus_thread(char device_or_uri[static 1]) {
