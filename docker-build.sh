@@ -12,12 +12,11 @@ volume=/root/HOST
 if [ -z "${FAST:-}" ]; then
     docker pull "debian:${channel}"
 
-    [ "$(docker ps -qaf "name=${container}")" ] || docker run --name $container -d -t -v "${PWD}:${volume}" "debian:${channel}"
+    [ "$(docker ps -qaf "name=${container}")" ] || docker run --name $container --detach --tty --volume "${PWD}:${volume}" --network host "debian:${channel}"
 
     docker start $container
 
     docker exec $container dpkg --configure -a
-    docker exec $container bash -c "echo \"deb http://ftp.sg.debian.org/debian ${channel} main\" | tee /etc/apt/sources.list"
     docker exec $container apt-get update
     docker exec $container apt-get upgrade -y
     #docker exec $container apt-get install -y gcc
