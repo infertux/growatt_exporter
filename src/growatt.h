@@ -79,6 +79,7 @@ const REGISTER input_registers[] = {
     {56, "grid energy today", "energy_grid_today_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
     {58, "grid energy total", "energy_grid_total_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
     {60, "battery discharging energy today", "battery_discharging_today_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
+    {62, "battery discharging energy total", "battery_discharging_total_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
     {64, "grid discharging energy today", "grid_discharging_today_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
     {66, "grid discharging energy total", "grid_discharging_total_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
     {68, "grid charging current", "grid_charging_amps", "current", "A", "measurement", REGISTER_SINGLE, 0.1},
