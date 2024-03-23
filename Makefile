@@ -1,5 +1,5 @@
-CC=clang
-#CC=gcc
+CC?=clang
+#CC?=gcc
 RM=rm -fv
 CFLAGS=$(shell pkg-config --cflags libbsd libconfig libmodbus libmosquitto)
 LIBS=$(shell pkg-config --libs libbsd libconfig libmodbus libmosquitto) -pthread
