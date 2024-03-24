@@ -10,13 +10,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: awalsh128/cache-apt-pkgs-action@latest
-      with:
-        packages: clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
-    - name: make
-      run: make
-    - name: make lint
-      run: make lint
-    - name: make test
-      run: make test
+      - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
+      - name: make
+        run: make
+      - name: make lint
+        run: make lint
+      - name: make test
+        run: make test
