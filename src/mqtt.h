@@ -16,7 +16,7 @@ enum {
   RESPONSE_SIZE = 8192U,
   PUBLISH_PERIOD = 15U, // seconds
   MQTT_CONFIG_SIZE = 128U,
-  MQTT_METRIC_ID_SIZE = 64U,
+  MQTT_METRIC_ID_SIZE = 128U,
   MQTT_METRIC_PAYLOAD_SIZE = 2048U,
 };
 
@@ -85,7 +85,7 @@ int start_mqtt_thread(void *config_ptr) {
 
   char payload[MQTT_METRIC_PAYLOAD_SIZE];
   char unique_id[MQTT_METRIC_ID_SIZE];
-  char topic[MQTT_METRIC_ID_SIZE * 2];
+  char topic[MQTT_METRIC_ID_SIZE + sizeof("homeassistant/sensor/%s/config")];
 
   for (size_t index = 0; index < COUNT(input_registers); index++) {
     const REGISTER reg = input_registers[index];
