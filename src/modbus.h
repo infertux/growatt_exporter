@@ -307,9 +307,7 @@ int query_modbus(modbus_t *ctx) {
   return device_metrics.read_metric_succeeded_total == 0 ? EXIT_NO_METRICS : EXIT_SUCCESS;
 }
 
-static void stop_modbus_thread(void) {
-  modbus_close(ctx);
-}
+static void stop_modbus_thread(void) { modbus_close(ctx); }
 
 int start_modbus_thread(char device_or_uri[static 1]) {
   LOG(LOG_DEBUG, "Modbus thread running...");

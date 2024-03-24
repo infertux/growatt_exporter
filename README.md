@@ -23,6 +23,7 @@ Would like to monitor Epever/Epsolar Tracer solar charge controllers instead? He
 
 - Blog post: https://www.splitbrain.org/blog/2023-11/03-growatt_and_home_assistant
 - Reading Modbus registers via Home Assistant: https://github.com/home-assistant/core/issues/94149
+- https://github.com/rspring/Esphome-Growatt
 
 ## License
 
