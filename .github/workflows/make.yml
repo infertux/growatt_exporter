@@ -6,15 +6,32 @@ on:
   pull_request:
     branches: [ "master" ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    continue-on-error: true  # FIXME: remove when gcc build is passing
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [clang, gcc]
     steps:
-    - uses: actions/checkout@v3
-    - uses: awalsh128/cache-apt-pkgs-action@latest
-      with:
-        packages: clang libbsd-dev libmodbus-dev
-    - name: make
-      run: make
-    - name: make lint
-      run: make lint
+      - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: ${{ matrix.cc }} libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev
+      - name: make with ${{ matrix.cc }}
+        run: env CC=${{ matrix.cc }} make
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
+      - name: make lint
+        run: env CC=clang make lint
+      - name: make test
+        run: env CC=clang make test

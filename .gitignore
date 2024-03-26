@@ -1,2 +1,4 @@
 /deploy.sh
 /growatt
+/html/
+/tests/mock-server

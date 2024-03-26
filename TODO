@@ -1,0 +1,5 @@
+- add program option --verbose instead of compile-time LOG_VERBOSE define
+- test program with either --mqtt XOR --prometheus but not both
+- go through commented code
+- fix all lint warnings
+- use condition variables to exit all threads cleanly?

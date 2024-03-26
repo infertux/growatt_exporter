@@ -7,7 +7,7 @@ This allows to monitor PV production, battery status, etc. on a nice Grafana int
 ## Build
 
 ```bash
-apt install clang libbsd-dev libmodbus-dev
+apt install clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
 make
 ```
 
@@ -18,6 +18,12 @@ The "Growatt OffGrid SPF5000 Modbus RS485 RTU Protocol" PDF document has been a 
 ## Other brands
 
 Would like to monitor Epever/Epsolar Tracer solar charge controllers instead? Here is a sister repository for that: https://github.com/infertux/epever_exporter
+
+## Other approaches
+
+- Blog post: https://www.splitbrain.org/blog/2023-11/03-growatt_and_home_assistant
+- Reading Modbus registers via Home Assistant: https://github.com/home-assistant/core/issues/94149
+- https://github.com/rspring/Esphome-Growatt
 
 ## License
 

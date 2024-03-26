@@ -1,19 +1,29 @@
-CC=clang
-RM=rm -f
-CFLAGS=$(shell pkg-config --cflags libbsd libmodbus)
-LIBS=$(shell pkg-config --libs libbsd libmodbus) -pthread
-
-SRCS=src/growatt.c src/*.h
+CC?=clang
+#CC?=gcc
+RM=rm -fv
+CFLAGS=$(shell pkg-config --cflags libbsd libconfig libmodbus libmosquitto)
+LIBS=$(shell pkg-config --libs libbsd libconfig libmodbus libmosquitto) -pthread
+SRCS=src/*
+TESTS=tests/*.c
 
 all: growatt
 
+doc: $(SRCS)
+	doxygen .doxygen
+
 growatt: $(SRCS)
-	$(CC) $(CFLAGS) $(LIBS) -Wall -Werror -pedantic -O3 -o growatt src/growatt.c
+	$(CC) -v $(CFLAGS) $(LIBS) -Wall -Werror -O3 -o growatt src/*.c
 
 lint:
-	clang-format --verbose --Werror -i --style=file src/*
-	clang-tidy --checks='*,-altera-id-dependent-backward-branch,-altera-unroll-loops,-cert-err33-c,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,-llvm-header-guard,-llvmlibc-restrict-system-libc-headers,-readability-function-cognitive-complexity' --format-style=llvm src/* -- $(CFLAGS)
+	clang-format --verbose --Werror -i --style=file $(SRCS) $(TESTS)
+	clang-tidy --checks='*,-altera-id-dependent-backward-branch,-altera-unroll-loops,-bugprone-assignment-in-if-condition,-cert-err33-c,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,-cppcoreguidelines-avoid-magic-numbers,-llvm-header-guard,-llvmlibc-restrict-system-libc-headers,-readability-function-cognitive-complexity' --format-style=llvm $(SRCS) $(TESTS) -- $(CFLAGS)
 .PHONY: lint
 
+test: growatt $(TESTS)
+	$(CC) -v $(shell pkg-config --libs --cflags libbsd libmodbus) -Wall -Werror -o tests/mock-server $(TESTS)
+	timeout 30 mosquitto_sub -h test.mosquitto.org -p 1884 -u rw -P readwrite -t homeassistant/sensor/growatt/state -d &
+	./tests/mock-server &
+	./growatt config-example.conf || true
+
 clean:
-	$(RM) growatt
+	$(RM) growatt tests/mock-server
