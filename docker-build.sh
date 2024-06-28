@@ -8,7 +8,7 @@ channel="${1:-stable}" # can be overriden with "bullseye" for example
 target=growatt
 container=${target}-builder-${channel}
 volume=/root/HOST
-cc=clang-13
+cc=clang
 
 if [ -z "${FAST:-}" ]; then
     docker pull "debian:${channel}"

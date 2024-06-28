@@ -1,15 +1,82 @@
 # growatt_exporter
 
-growatt_exporter is a standalone program written in C that can query Growatt solar inverters (tested on SPF5000ES so far) and output metrics compatible with Prometheus.
-
+growatt_exporter is a standalone program written in C that can query [Growatt](https://www.growattenergy.com/) solar inverters and output metrics compatible with Prometheus, Grafana, MQTT and Home Assistant.
 This allows to monitor PV production, battery status, etc. on a nice Grafana interface.
 
+This has been tested extensively on the [SPF 5000 ES](https://www.growattenergy.com/product/growatt-spf-5000-es-off-grid/) but should work with any product offering a RS485 interface.
+
+## Screenshots
+
+![PV Production](doc/pv-production.png)
+![Inverter Output](doc/inverter-output.png)
+![Home Assistant](doc/home-assistant.png)
+
+The complete list of sensors can be found in [growatt.h](src/growatt.h).
+
 ## Build
+
+### From source
 
 ```bash
 apt install clang libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev mosquitto-clients
 make
 ```
+
+### Using Docker
+
+```bash
+./docker-build.sh
+```
+
+## Install
+
+1. Install runtime dependencies:
+
+`apt install libconfig9 libmodbus5 libmosquitto1`
+
+2. Copy binary:
+
+`cp growatt /opt/growatt-exporter`
+
+3. Create config file `/etc/growatt-exporter.conf`:
+
+```
+device_or_uri = "/dev/ttyUSB0"
+
+prometheus = {
+  port = 1234
+}
+
+mqtt = {
+  host = "10.0.0.1"
+  port = 1883
+  username = "homeassistant"
+  password = "foobar"
+}
+```
+
+4. Create systemd service file `/etc/systemd/system/growatt-exporter.service`:
+
+```systemd
+[Unit]
+After=network.target
+
+[Service]
+ExecStart=/opt/growatt-exporter /etc/growatt-exporter.conf
+Restart=on-failure
+RestartSec=10
+PrivateTmp=true
+ProtectHome=true
+ProtectProc=invisible
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
+```
+
+5. Enable and start systemd service:
+
+`systemctl enable --now growatt-exporter`
 
 ## Kudos
 
