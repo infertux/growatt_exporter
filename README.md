@@ -36,7 +36,7 @@ make
 
 2. Copy binary:
 
-`cp growatt /opt/growatt-exporter`
+`cp growatt_exporter /opt/growatt-exporter`
 
 3. Create config file `/etc/growatt-exporter.conf`:
 

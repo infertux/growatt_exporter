@@ -5,7 +5,7 @@ set -euxo pipefail
 cd "$(dirname "$0")"
 
 channel="${1:-stable}" # can be overriden with "bullseye" for example
-target=growatt
+target=growatt_exporter
 container=${target}-builder-${channel}
 volume=/root/HOST
 cc=clang
