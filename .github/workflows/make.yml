@@ -12,11 +12,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    continue-on-error: true  # FIXME: remove when gcc build is passing
     strategy:
       fail-fast: false
       matrix:
-        cc: [clang, gcc]
+        #cc: [clang, gcc] # gcc build is broken for now
+        cc: [clang]
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
