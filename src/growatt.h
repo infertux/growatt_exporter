@@ -45,7 +45,7 @@ const REGISTER holding_registers[] = {
 
 const REGISTER input_registers[] = {
     // NOLINTBEGIN(readability-magic-numbers)
-    {0, "system status", "system_status", "None", "", "measurement", REGISTER_SINGLE, 1},
+    {0, "system status", "system_status", "", "", "measurement", REGISTER_SINGLE, 1},
     {1, "PV1 voltage", "pv1_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1},
     {3, "PV1 power", "pv1_watts", "power", "W", "measurement", REGISTER_DOUBLE, 0.1},
     {7, "buck1 current", "buck1_amps", "current", "A", "measurement", REGISTER_SINGLE, 0.1},
@@ -61,14 +61,14 @@ const REGISTER input_registers[] = {
     // {24, "output DC voltage", "output_dc_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1}, // XXX: always zero
     {25, "inverter temperature", "temperature_inverter_celsius", "temperature", "°C", "measurement", REGISTER_SINGLE, 0.1},
     {26, "DC-DC temperature", "temperature_dcdc_celsius", "temperature", "°C", "measurement", REGISTER_SINGLE, 0.1},
-    {27, "inverter load percent", "inverter_load_percent", "None", "%", "measurement", REGISTER_SINGLE, 0.1},
+    {27, "inverter load percent", "inverter_load_percent", "", "%", "measurement", REGISTER_SINGLE, 0.1},
     // {30, "work time total", "work_time_total_seconds", REGISTER_DOUBLE, 0.5}, // XXX: always zero
     {32, "buck1 temperature", "temperature_buck1_celsius", "temperature", "°C", "measurement", REGISTER_SINGLE, 0.1},
     // {33, "buck2 temperature", "temperature_buck2_celsius", REGISTER_SINGLE, 0.1}, // irrelevant
     {34, "output current", "output_amps", "current", "A", "measurement", REGISTER_SINGLE, 0.1},
     {35, "inverter current", "inverter_amps", "current", "A", "measurement", REGISTER_SINGLE, 0.1},
-    {40, "fault bit", "fault_bit", "None", "", "measurement", REGISTER_SINGLE, 1},
-    {41, "warning bit", "warning_bit", "None", "", "measurement", REGISTER_SINGLE, 1},
+    {40, "fault bit", "fault_bit", "", "", "measurement", REGISTER_SINGLE, 1},
+    {41, "warning bit", "warning_bit", "", "", "measurement", REGISTER_SINGLE, 1},
     // {42, "fault value", "fault_value", REGISTER_SINGLE, 1}, // XXX: always zero
     // {43, "warning value", "warning_value", REGISTER_SINGLE, 1}, // XXX: always zero
     // {45, "product check step", "product_check_step", REGISTER_SINGLE, 1}, // irrelevant

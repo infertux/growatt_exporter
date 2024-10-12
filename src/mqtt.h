@@ -91,11 +91,21 @@ int start_mqtt_thread(void *config_ptr) {
     const REGISTER reg = input_registers[index];
 
     sprintf(unique_id, "growatt_%s", reg.metric_name);
-    sprintf(payload,
-            "{\"device_class\":\"%s\",\"state_class\":\"%s\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"%s\","
-            "\"value_template\":\"{{value_json.%s}}\",\"name\":\"%s\",\"unique_id\":\"%s\","
-            "\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":\"Growatt\"}}",
-            reg.device_class, reg.state_class, TOPIC_STATE, reg.unit, reg.metric_name, reg.human_name, unique_id);
+
+    // don't include empty device_class otherwise https://www.home-assistant.io/integrations/mqtt will throw errors in the logs
+    if (strlen(reg.device_class) > 0) {
+      sprintf(payload,
+              "{\"device_class\":\"%s\",\"state_class\":\"%s\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"%s\","
+              "\"value_template\":\"{{value_json.%s}}\",\"name\":\"%s\",\"unique_id\":\"%s\","
+              "\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":\"Growatt\"}}",
+              reg.device_class, reg.state_class, TOPIC_STATE, reg.unit, reg.metric_name, reg.human_name, unique_id);
+    } else {
+      sprintf(payload,
+              "{\"state_class\":\"%s\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"%s\","
+              "\"value_template\":\"{{value_json.%s}}\",\"name\":\"%s\",\"unique_id\":\"%s\","
+              "\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":\"Growatt\"}}",
+              reg.state_class, TOPIC_STATE, reg.unit, reg.metric_name, reg.human_name, unique_id);
+    }
 
     sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
     mosquitto_publish(client, NULL, topic, (int)strlen(payload), payload, 0, true);
