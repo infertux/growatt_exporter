@@ -87,7 +87,7 @@ const REGISTER input_registers[] = {
     {73, "battery discharging power", "battery_discharging_watts", "power", "W", "measurement", REGISTER_DOUBLE, 0.1},
     {77, "battery net power", "battery_net_watts", "power", "W", "measurement", REGISTER_DOUBLE, -0.1}, // XXX: signed value
     // {81, "fan speed MPPT", "fan_speed_mppt", REGISTER_SINGLE, 1}, // XXX: always zero
-    {82, "fan speed inverter", "fan_speed_inverter", "wind_speed", "%", "measurement", REGISTER_SINGLE, 1},
+    {82, "fan speed inverter", "fan_speed_inverter", "", "%", "measurement", REGISTER_SINGLE, 1},
     // {180, "solar charger status", "solar_status", REGISTER_SINGLE, 1}, // XXX: always zero
     // NOLINTEND(readability-magic-numbers)
 };
