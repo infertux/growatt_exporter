@@ -29,3 +29,6 @@ fi
 docker exec --workdir "${volume}" "$container" rm -fv $target
 docker exec --workdir "${volume}" "$container" env CC=$cc make $target
 docker exec --workdir "${volume}" "$container" ls -l $target
+
+user=$(id -un)
+sudo chown "${user}:" $target

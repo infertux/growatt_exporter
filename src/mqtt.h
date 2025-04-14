@@ -9,7 +9,7 @@
 #include "log.h"
 #include "modbus.h"
 
-#define TOPIC_STATE "homeassistant/sensor/growatt/state"
+#define TOPIC_PREFIX "homeassistant/sensor/growatt"
 
 enum {
   MQTT_KEEPALIVE = 60U,
@@ -25,6 +25,7 @@ typedef struct __attribute__((aligned(32))) {
   int port;
   const char *username;
   const char *password;
+  int id;
 } mqtt_config;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -90,21 +91,21 @@ int start_mqtt_thread(void *config_ptr) {
   for (size_t index = 0; index < COUNT(input_registers); index++) {
     const REGISTER reg = input_registers[index];
 
-    sprintf(unique_id, "growatt_%s", reg.metric_name);
+    sprintf(unique_id, "growatt_%" PRIu8 "_%s", config->id, reg.metric_name);
 
     // don't include empty device_class otherwise https://www.home-assistant.io/integrations/mqtt will throw errors in the logs
     if (strlen(reg.device_class) > 0) {
       sprintf(payload,
-              "{\"device_class\":\"%s\",\"state_class\":\"%s\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"%s\","
+              "{\"device_class\":\"%s\",\"state_class\":\"%s\",\"state_topic\":\"%s_%" PRIu8 "/state\",\"unit_of_measurement\":\"%s\","
               "\"value_template\":\"{{value_json.%s}}\",\"name\":\"%s\",\"unique_id\":\"%s\","
-              "\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":\"Growatt\"}}",
-              reg.device_class, reg.state_class, TOPIC_STATE, reg.unit, reg.metric_name, reg.human_name, unique_id);
+              "\"device\":{\"identifiers\":[\"%" PRIu8 "\"],\"name\":\"Growatt %" PRIu8 "\",\"manufacturer\":\"Growatt\"}}",
+              reg.device_class, reg.state_class, TOPIC_PREFIX, config->id, reg.unit, reg.metric_name, reg.human_name, unique_id, config->id, config->id);
     } else {
       sprintf(payload,
-              "{\"state_class\":\"%s\",\"state_topic\":\"%s\",\"unit_of_measurement\":\"%s\","
+              "{\"state_class\":\"%s\",\"state_topic\":\"%s_%" PRIu8 "/state\",\"unit_of_measurement\":\"%s\","
               "\"value_template\":\"{{value_json.%s}}\",\"name\":\"%s\",\"unique_id\":\"%s\","
-              "\"device\":{\"identifiers\":[\"1\"],\"name\":\"Growatt\",\"manufacturer\":\"Growatt\"}}",
-              reg.state_class, TOPIC_STATE, reg.unit, reg.metric_name, reg.human_name, unique_id);
+              "\"device\":{\"identifiers\":[\"%" PRIu8 "\"],\"name\":\"Growatt %" PRIu8 "\",\"manufacturer\":\"Growatt\"}}",
+              reg.state_class, TOPIC_PREFIX, config->id, reg.unit, reg.metric_name, reg.human_name, unique_id, config->id, config->id);
     }
 
     sprintf(topic, "homeassistant/sensor/%s/config", unique_id);
@@ -129,8 +130,9 @@ int start_mqtt_thread(void *config_ptr) {
     metrics[strlen(metrics) - 1] = '}'; // replace last ','
 
     if (strlen(metrics) > 1) { // don't publish empty metrics
-      LOG(LOG_INFO, "Publishing status (%zu bytes) to broker...", strlen(metrics));
-      mosquitto_publish(client, NULL, TOPIC_STATE, (int)strlen(metrics), metrics, 0 /* QoS */, false /* retain */);
+      sprintf(topic, "%s_%" PRIu8 "/state", TOPIC_PREFIX, config->id);
+      LOG(LOG_INFO, "Publishing status (%zu bytes) to %s...", strlen(metrics), topic);
+      mosquitto_publish(client, NULL, topic, (int)strlen(metrics), metrics, 0 /* QoS */, false /* retain */);
     }
 
     LOG(LOG_DEBUG, "Waiting %u seconds...", PUBLISH_PERIOD);

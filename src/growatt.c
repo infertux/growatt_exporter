@@ -72,6 +72,10 @@ int parse_config(config *config, config_t *parser, char const *filename) {
     config->mqtt_config.port = 0;
   }
 
+  if (CONFIG_TRUE != config_lookup_int(parser, "mqtt.id", &config->mqtt_config.id)) {
+    config->mqtt_config.id = 0;
+  }
+
   config_lookup_string(parser, "mqtt.host", &config->mqtt_config.host);
   config_lookup_string(parser, "mqtt.username", &config->mqtt_config.username);
   config_lookup_string(parser, "mqtt.password", &config->mqtt_config.password);

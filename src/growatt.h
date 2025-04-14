@@ -34,6 +34,7 @@ typedef struct __attribute__((aligned(MAX_METRIC_LENGTH * 2))) {
 
 const REGISTER holding_registers[] = {
     // NOLINTBEGIN(readability-magic-numbers)
+    {30, "communication address", "settings_communication_address", "", "", "measurement", REGISTER_SINGLE, 1},
     {34, "max charging current", "settings_max_charging_amps", "current", "A", "measurement", REGISTER_SINGLE, 1},
     {35, "bulk charging voltage", "settings_bulk_charging_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1},
     {36, "float charging voltage", "settings_float_charging_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1},
