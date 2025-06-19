@@ -297,7 +297,14 @@ int query_modbus(modbus_t *ctx) {
     if (-1 == ret) {
       read_register_failed(&reg);
     } else {
-      add_metric(reg.metric_name, *result);
+      if (reg.address == 50 && *result == 0) {
+        // XXX: sometimes register 50 (energy_pv_total_kwh) is zero which messes up with statistics
+        // XXX: this is a bit of a hack and should be handled somewhere else if more sanity checks become needed
+        LOG(LOG_ERROR, "Discarding bogus register 50");
+        read_register_failed(&reg);
+      } else {
+        add_metric(reg.metric_name, *result);
+      }
     }
   }
 
