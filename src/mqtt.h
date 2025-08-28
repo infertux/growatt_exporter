@@ -56,7 +56,7 @@ int start_mqtt_thread(void *config_ptr) {
 
   mosquitto_lib_init();
 
-  client = mosquitto_new("growatt-exporter", true, NULL);
+  client = mosquitto_new(NULL, true, NULL);
   if (!client) {
     PERROR("Cannot create mosquitto client instance");
     return EXIT_FAILURE;

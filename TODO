@@ -1,3 +1,4 @@
+- FEATURE: provide binaries built with CI
 - BUGFIX: automatically reconnect to MQTT broker when connection lost
 - add program option --verbose instead of compile-time LOG_VERBOSE define
 - test program with either --mqtt XOR --prometheus but not both
