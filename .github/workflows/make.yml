@@ -2,9 +2,9 @@ name: Make
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 permissions:
   contents: read
@@ -24,6 +24,12 @@ jobs:
           packages: ${{ matrix.cc }} libbsd-dev libconfig-dev libmodbus-dev libmosquitto-dev
       - name: make with ${{ matrix.cc }}
         run: env CC=${{ matrix.cc }} make
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          path: growatt_exporter
+          name: growatt_exporter
+
   test:
     runs-on: ubuntu-latest
     steps:
