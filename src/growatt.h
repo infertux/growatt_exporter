@@ -63,16 +63,20 @@ const REGISTER input_registers[] = {
     {25, "inverter temperature", "temperature_inverter_celsius", "temperature", "°C", "measurement", REGISTER_SINGLE, 0.1},
     {26, "DC-DC temperature", "temperature_dcdc_celsius", "temperature", "°C", "measurement", REGISTER_SINGLE, 0.1},
     {27, "inverter load percent", "inverter_load_percent", "", "%", "measurement", REGISTER_SINGLE, 0.1},
+    // {28, "battery port voltage", "battery_port_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1}, // XXX: always zero
+    // {29, "battery bus voltage", "battery_bus_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1}, // XXX: always zero
     // {30, "work time total", "work_time_total_seconds", REGISTER_DOUBLE, 0.5}, // XXX: always zero
     {32, "buck1 temperature", "temperature_buck1_celsius", "temperature", "°C", "measurement", REGISTER_SINGLE, 0.1},
     // {33, "buck2 temperature", "temperature_buck2_celsius", REGISTER_SINGLE, 0.1}, // irrelevant
     {34, "output current", "output_amps", "current", "A", "measurement", REGISTER_SINGLE, 0.1},
     {35, "inverter current", "inverter_amps", "current", "A", "measurement", REGISTER_SINGLE, 0.1},
+    {36, "grid input power", "grid_input_watts", "power", "W", "measurement", REGISTER_DOUBLE, 0.1},
     {40, "fault bit", "fault_bit", "", "", "measurement", REGISTER_SINGLE, 1},
     {41, "warning bit", "warning_bit", "", "", "measurement", REGISTER_SINGLE, 1},
     // {42, "fault value", "fault_value", REGISTER_SINGLE, 1}, // XXX: always zero
     // {43, "warning value", "warning_value", REGISTER_SINGLE, 1}, // XXX: always zero
-    // {45, "product check step", "product_check_step", REGISTER_SINGLE, 1}, // irrelevant
+    {44, "device type", "device_type", "", "", "measurement", REGISTER_SINGLE, 1}, // always "20105" for me
+    {45, "product check step", "product_check_step", "", "", "measurement", REGISTER_SINGLE, 1}, // looks like some kind of uptime?
     // {46, "production line mode", "production_line_mode", REGISTER_SINGLE, 1}, // XXX: always zero
     // {47, "constant power OK flag", "constant_power_ok_flag", REGISTER_SINGLE, 1}, // XXX: always zero
     {48, "PV energy today", "energy_pv_today_kwh", "energy", "kWh", "total_increasing", REGISTER_DOUBLE, 0.1},
@@ -87,9 +91,13 @@ const REGISTER input_registers[] = {
     {69, "inverter discharging power", "inverter_discharging_watts", "power", "W", "measurement", REGISTER_DOUBLE, 0.1},
     {73, "battery discharging power", "battery_discharging_watts", "power", "W", "measurement", REGISTER_DOUBLE, 0.1},
     {77, "battery net power", "battery_net_watts", "power", "W", "measurement", REGISTER_DOUBLE, -0.1}, // XXX: signed value
+    {80, "battery overcharge", "battery_overcharge", "", "", "measurement", REGISTER_SINGLE, 1}, // values are 0 and 1
     // {81, "fan speed MPPT", "fan_speed_mppt", REGISTER_SINGLE, 1}, // XXX: always zero
     {82, "fan speed inverter", "fan_speed_inverter", "", "%", "measurement", REGISTER_SINGLE, 1},
-    // {180, "solar charger status", "solar_status", REGISTER_SINGLE, 1}, // XXX: always zero
+    // {180, "solar charger status", "solar_status", "", "", "measurement", REGISTER_SINGLE, 1}, // XXX: always zero
+    {181, "solar charger fault", "solar_fault", "", "", "measurement", REGISTER_SINGLE, 1},
+    {182, "solar charger warning", "solar_warning", "", "", "measurement", REGISTER_SINGLE, 1},
+    // {183, "solar charger battery voltage", "solar_battery_volts", "voltage", "V", "measurement", REGISTER_SINGLE, 0.1}, // XXX: always zero
     // NOLINTEND(readability-magic-numbers)
 };
 
