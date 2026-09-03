@@ -46,6 +46,10 @@ void connection_callback(struct mosquitto *_mosq, void *_obj, int code) { // NOL
   }
 }
 
+void disconnect_callback(struct mosquitto *_mosq, void *_obj, int code) { // NOLINT(misc-unused-parameters)
+  LOG(LOG_ERROR, "Disconnected from broker: %s (%d)\n", mosquitto_strerror(code), code);
+}
+
 int start_mqtt_thread(void *config_ptr) {
   if (atexit(stop_mqtt_thread)) {
     PERROR("Could not register cleanup routine");
@@ -63,6 +67,7 @@ int start_mqtt_thread(void *config_ptr) {
   }
 
   mosquitto_connect_callback_set(client, connection_callback);
+  mosquitto_disconnect_callback_set(client, disconnect_callback);
 
   assert(strlen(config->username) > 0);
   assert(strlen(config->password) > 0);
@@ -131,8 +136,13 @@ int start_mqtt_thread(void *config_ptr) {
 
     if (strlen(metrics) > 1) { // don't publish empty metrics
       sprintf(topic, "%s_%" PRIu8 "/state", TOPIC_PREFIX, config->id);
-      LOG(LOG_INFO, "Publishing status (%zu bytes) to %s...", strlen(metrics), topic);
-      mosquitto_publish(client, NULL, topic, (int)strlen(metrics), metrics, 0 /* QoS */, false /* retain */);
+
+      int rc = mosquitto_publish(client, NULL, topic, (int)strlen(metrics), metrics, 0 /* QoS */, false /* retain */);
+      if (rc != MOSQ_ERR_SUCCESS) {
+        LOG(LOG_ERROR, "Publish failed: %s (%d)", mosquitto_strerror(rc), rc);
+      } else {
+        LOG(LOG_INFO, "Published status (%zu bytes) to %s", strlen(metrics), topic);
+      }
     }
 
     LOG(LOG_DEBUG, "Waiting %u seconds...", PUBLISH_PERIOD);
