@@ -38,7 +38,7 @@ static void stop_mqtt_thread(void) {
   mosquitto_lib_cleanup();
 }
 
-void connection_callback(struct mosquitto *_mosq, void *_obj, int code) { // NOLINT(misc-unused-parameters)
+void connect_callback(struct mosquitto *_mosq, void *_obj, int code) { // NOLINT(misc-unused-parameters)
   if (code) {
     LOG(LOG_ERROR, "Cannot connect to broker: %s (%d)\n", mosquitto_connack_string(code), code);
     stop_mqtt_thread();
@@ -66,7 +66,7 @@ int start_mqtt_thread(void *config_ptr) {
     return EXIT_FAILURE;
   }
 
-  mosquitto_connect_callback_set(client, connection_callback);
+  mosquitto_connect_callback_set(client, connect_callback);
   mosquitto_disconnect_callback_set(client, disconnect_callback);
 
   assert(strlen(config->username) > 0);
