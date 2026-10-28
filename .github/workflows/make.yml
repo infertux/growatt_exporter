@@ -15,8 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #cc: [clang, gcc] # gcc build is broken for now
-        cc: [clang]
+        cc: [clang, gcc]
     steps:
       - uses: actions/checkout@v4
       - uses: awalsh128/cache-apt-pkgs-action@latest
