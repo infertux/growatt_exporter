@@ -12,7 +12,7 @@ doc: $(SRCS)
 	doxygen .doxygen
 
 growatt_exporter: $(SRCS)
-	$(CC) -v $(CFLAGS) $(LIBS) -Wall -Werror -O3 -o growatt_exporter src/*.c
+	$(CC) -v $(CFLAGS) -Wall -Werror -O3 -o growatt_exporter src/*.c $(LIBS)
 
 lint:
 	clang-format --verbose --Werror -i --style=file $(SRCS) $(TESTS)
@@ -20,7 +20,7 @@ lint:
 .PHONY: lint
 
 test: growatt_exporter $(TESTS)
-	$(CC) -v $(shell pkg-config --libs --cflags libbsd libmodbus) -Wall -Werror -o tests/mock-server $(TESTS)
+	$(CC) -v $(shell pkg-config --cflags libbsd libmodbus) -Wall -Werror -o tests/mock-server $(TESTS) $(shell pkg-config --libs libbsd libmodbus)
 	timeout 30 mosquitto_sub -h test.mosquitto.org -p 1884 -u rw -P readwrite -t homeassistant/sensor/growatt/state -d &
 	./tests/mock-server &
 	./growatt_exporter config-example.conf || true
