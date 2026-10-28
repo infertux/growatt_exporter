@@ -105,7 +105,7 @@ static void stop_prometheus_thread(void) {
   }
 }
 
-static void sig_handler() {
+static void sig_handler(int _signal) { // NOLINT(misc-unused-parameters)
   keep_running = 0;
   stop_prometheus_thread();
 }
