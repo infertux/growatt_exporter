@@ -27,7 +27,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: growatt_exporter
-          name: growatt_exporter
+          name: growatt_exporter-${{ matrix.cc }}
 
   test:
     runs-on: ubuntu-latest
